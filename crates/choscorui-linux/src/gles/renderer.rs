@@ -414,6 +414,20 @@ impl Renderer {
         scale: f64,
         area: Option<Area>,
     ) -> Result<(), PaintIssue> {
+        self.paint_at(list, target, scale, Point::new(0.0, 0.0), area)
+    }
+
+    /// Paints `list` as [`Renderer::paint`] does, with the point (0, 0)
+    /// of the list at `origin` points from the top-left corner of the
+    /// target.
+    pub(crate) fn paint_at(
+        &mut self,
+        list: &DisplayList,
+        target: Target,
+        scale: f64,
+        origin: Point,
+        area: Option<Area>,
+    ) -> Result<(), PaintIssue> {
         let gl = self.gl;
         // Errors of earlier calls are not this paint's.
         while failed(gl.error()) {}
@@ -441,7 +455,7 @@ impl Renderer {
             target,
             full,
             current: target.framebuffer,
-            matrix: [scale, 0.0, 0.0, scale, 0.0, 0.0],
+            matrix: [scale, 0.0, 0.0, scale, origin.x * scale, origin.y * scale],
             clip: Clip { area, mask: None },
             stack: Vec::new(),
             layer_depth: 0,

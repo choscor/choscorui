@@ -8,8 +8,8 @@
 use super::transfer::{self, Payload};
 use super::types::{Error, PaintTiming, Painter, ResizeEdge, TextInputState, WindowEvent};
 use choscorui_core::{
-    CursorShape, DisplayList, DragFormat, DragItem, DragOperations, DrawRegions, Image, Point,
-    Rect, Size, WindowGeometry,
+    CursorShape, DisplayList, DragFormat, DragItem, DragOperations, DrawRegions, Image, Insets,
+    Point, Rect, Size, WindowGeometry,
 };
 use std::cell::{Cell, RefCell};
 use std::collections::VecDeque;
@@ -40,6 +40,16 @@ pub(crate) trait Surface {
     fn begin_resize(&self, edge: ResizeEdge);
     /// Shows the window manager's window menu at `position`.
     fn show_window_menu(&self, position: Point);
+    /// Asks for `margin` around the content, for the shadow and the
+    /// outer resize band of client-side decorations. Only `input_area`,
+    /// in content coordinates, takes pointer input. A display server
+    /// that draws the frame ignores it.
+    fn set_frame_margin(&self, _margin: Insets, _input_area: Rect) {}
+    /// True when the window is tiled: one or more of its edges touch
+    /// another window or the edge of the screen.
+    fn is_tiled(&self) -> bool {
+        false
+    }
     fn set_maximized(&self, maximized: bool);
     fn minimize(&self);
     /// True when the display server draws the title bar and the frame.
@@ -101,6 +111,9 @@ pub(crate) struct WindowShared {
     pub(crate) title: RefCell<String>,
     /// The logical size of the content.
     pub(crate) size: Cell<Size>,
+    /// The margin of the surface around the content, which applies now.
+    /// The content starts at its top-left corner.
+    pub(crate) margin: Cell<Insets>,
     pub(crate) minimum: Size,
     pub(crate) scale: Cell<f64>,
     pub(crate) visible: Cell<bool>,
@@ -126,6 +139,7 @@ impl WindowShared {
         Rc::new(Self {
             title: RefCell::new(title.to_owned()),
             size: Cell::new(size),
+            margin: Cell::new(Insets::default()),
             minimum,
             scale: Cell::new(1.0),
             visible: Cell::new(false),
@@ -169,9 +183,22 @@ impl WindowShared {
         self.events.borrow_mut().push_back(event);
     }
 
-    /// The whole content, in logical points.
+    /// The whole surface in logical points: the content and its margin,
+    /// in content coordinates.
     pub(crate) fn bounds(&self) -> Rect {
-        Rect::new(Point::new(0.0, 0.0), self.size.get())
+        let (size, margin) = (self.size.get(), self.margin.get());
+        Rect::from_xywh(
+            -margin.left,
+            -margin.top,
+            size.width + margin.left + margin.right,
+            size.height + margin.top + margin.bottom,
+        )
+    }
+
+    /// The point of the surface where the content starts.
+    pub(crate) fn origin(&self) -> Point {
+        let margin = self.margin.get();
+        Point::new(margin.left, margin.top)
     }
 
     /// Marks the whole content for the next paint, after a resize, a
@@ -430,6 +457,37 @@ impl Window {
     /// handled.
     pub fn begin_resize(&self, edge: ResizeEdge) {
         self.surface.begin_resize(edge);
+    }
+
+    /// Gives the window `margin` around its content, for the shadow and
+    /// the outer resize band of client-side decorations. The display list
+    /// can paint into the margin, outside the content bounds. Only
+    /// `input_area`, in content coordinates, takes pointer input; the
+    /// rest of the margin lets the input go to the window below.
+    ///
+    /// The window geometry stays the content. A maximized, full-screen,
+    /// or tiled window has no margin. X11 window managers draw the frame,
+    /// so X11 ignores the margin.
+    pub fn set_frame_margin(&self, margin: Insets, input_area: Rect) {
+        let valid = [margin.left, margin.top, margin.right, margin.bottom]
+            .into_iter()
+            .all(|side| side.is_finite() && side >= 0.0);
+        if valid && !self.shared.closed.get() {
+            self.surface.set_frame_margin(margin, input_area);
+        }
+    }
+
+    /// The margin around the content that applies now: zero without
+    /// client-side decorations, and for a maximized, full-screen, or
+    /// tiled window.
+    pub fn frame_margin(&self) -> Insets {
+        self.shared.margin.get()
+    }
+
+    /// True when the compositor tiles the window: one or more of its
+    /// edges touch another window or the edge of the screen.
+    pub fn is_tiled(&self) -> bool {
+        self.surface.is_tiled()
     }
 
     /// Shows the window menu of the window manager at `position`, in

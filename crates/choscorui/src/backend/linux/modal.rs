@@ -308,7 +308,7 @@ impl Modal {
             host.advance(started.elapsed().as_secs_f64());
             if host.needs_frame() {
                 host.layout();
-                native.present(host.paint());
+                native.present(&mut host);
                 native.set_cursor(host.cursor());
             }
             for error in host.take_errors() {

@@ -179,7 +179,9 @@ impl Client {
                     ],
                 );
             }
-            let caret = state.caret;
+            // The rectangle is surface-local.
+            let origin = window.shared.origin();
+            let caret = state.caret.translate(origin.x, origin.y);
             let _ = input.proxy.request(
                 SET_CURSOR_RECTANGLE,
                 &[

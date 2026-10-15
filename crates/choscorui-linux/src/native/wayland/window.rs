@@ -13,7 +13,7 @@ use crate::native::paint::{self, Pixels};
 use crate::native::types::{Error, Painter, ResizeEdge, WindowEvent};
 use crate::native::window::{Surface, WindowShared};
 use crate::{FrameScheduler, FrameToken, WaylandSurface};
-use choscorui_core::{CursorShape, Point, Rect, Size, WindowGeometry};
+use choscorui_core::{CursorShape, Insets, Point, Rect, Size, WindowGeometry};
 use std::cell::{Cell, RefCell};
 use std::rc::{Rc, Weak};
 use std::time::Instant;
@@ -21,9 +21,14 @@ use std::time::Instant;
 // wl_surface requests.
 const SURFACE_ATTACH: u16 = 1;
 const SURFACE_FRAME: u16 = 3;
+const SURFACE_SET_INPUT_REGION: u16 = 5;
 const SURFACE_COMMIT: u16 = 6;
 const SURFACE_SET_BUFFER_SCALE: u16 = 8;
 const SURFACE_DAMAGE_BUFFER: u16 = 9;
+// wl_compositor and wl_region requests.
+const COMPOSITOR_CREATE_REGION: u16 = 1;
+const REGION_DESTROY: u16 = 0;
+const REGION_ADD: u16 = 1;
 // xdg_surface requests.
 const XDG_SURFACE_DESTROY: u16 = 0;
 const XDG_SURFACE_GET_TOPLEVEL: u16 = 1;
@@ -53,10 +58,11 @@ const POSITIONER_SET_ANCHOR: u16 = 3;
 const POSITIONER_SET_GRAVITY: u16 = 4;
 const POSITIONER_SET_CONSTRAINT_ADJUSTMENT: u16 = 5;
 // xdg_positioner values: the bottom-left corner of the anchor, growing
-// down and to the right. At a screen edge it flips, then slides.
+// down and to the right. At a screen edge it flips, then slides. A popup
+// that still does not fit gets a smaller size, and its content scrolls.
 const ANCHOR_BOTTOM_LEFT: u32 = 6;
 const GRAVITY_BOTTOM_RIGHT: u32 = 8;
-const ADJUST_SLIDE_FLIP: u32 = 1 | 2 | 4 | 8;
+const ADJUST_SLIDE_FLIP_RESIZE: u32 = 1 | 2 | 4 | 8 | 16 | 32;
 // xdg_popup requests.
 const POPUP_DESTROY: u16 = 0;
 const POPUP_GRAB: u16 = 1;
@@ -64,6 +70,8 @@ const POPUP_GRAB: u16 = 1;
 const STATE_MAXIMIZED: u32 = 1;
 const STATE_FULLSCREEN: u32 = 2;
 const STATE_ACTIVATED: u32 = 4;
+const STATE_TILED_LEFT: u32 = 5;
+const STATE_TILED_BOTTOM: u32 = 8;
 // zxdg_toplevel_decoration_v1.
 const DECORATION_DESTROY: u16 = 0;
 const DECORATION_SET_MODE: u16 = 1;
@@ -84,6 +92,7 @@ struct PendingConfigure {
     maximized: bool,
     full_screen: bool,
     activated: bool,
+    tiled: bool,
 }
 
 pub(crate) struct Inner {
@@ -94,6 +103,14 @@ pub(crate) struct Inner {
     pending: PendingConfigure,
     maximized: bool,
     full_screen: bool,
+    tiled: bool,
+    /// The margin and the input area that the application asks for, in
+    /// content coordinates. They apply while the window is not
+    /// maximized, full screen, or tiled.
+    decoration_frame: Option<(Insets, Rect)>,
+    /// The input region that the surface has, in surface points. None
+    /// for the whole surface.
+    input_region: Option<Rect>,
     pub(crate) server_side: bool,
     /// The scale from `wp_fractional_scale_v1`, in 120ths.
     fractional: Option<u32>,
@@ -240,6 +257,9 @@ impl WaylandWindow {
                 pending: PendingConfigure::default(),
                 maximized: false,
                 full_screen: false,
+                tiled: false,
+                decoration_frame: None,
+                input_region: None,
                 server_side: false,
                 fractional: None,
                 integer: 1,
@@ -330,7 +350,7 @@ impl WaylandWindow {
             ),
             (
                 POSITIONER_SET_CONSTRAINT_ADJUSTMENT,
-                vec![Arg::Uint(ADJUST_SLIDE_FLIP)],
+                vec![Arg::Uint(ADJUST_SLIDE_FLIP_RESIZE)],
             ),
         ];
         for (opcode, args) in &requests {
@@ -381,6 +401,9 @@ impl WaylandWindow {
                 pending: PendingConfigure::default(),
                 maximized: false,
                 full_screen: false,
+                tiled: false,
+                decoration_frame: None,
+                input_region: None,
                 server_side: true,
                 fractional: None,
                 integer,
@@ -400,6 +423,12 @@ impl WaylandWindow {
             routes.insert(proxy.id(), Role::Popup(weak));
         }
         Ok(window)
+    }
+
+    /// The point of the content at `surface`, a surface-local point.
+    pub(crate) fn content_point(&self, surface: Point) -> Point {
+        let origin = self.shared.origin();
+        Point::new(surface.x - origin.x, surface.y - origin.y)
     }
 
     /// True for a popup window.
@@ -437,6 +466,7 @@ impl WaylandWindow {
                 STATE_MAXIMIZED => pending.maximized = true,
                 STATE_FULLSCREEN => pending.full_screen = true,
                 STATE_ACTIVATED => pending.activated = true,
+                STATE_TILED_LEFT..=STATE_TILED_BOTTOM => pending.tiled = true,
                 _ => {}
             }
         }
@@ -475,9 +505,11 @@ impl WaylandWindow {
         }
         inner.maximized = pending.maximized;
         inner.full_screen = pending.full_screen;
+        inner.tiled = pending.tiled;
         let first = !inner.mapped;
         inner.mapped = true;
         drop(inner);
+        self.apply_margin();
         if let Some(xdg_surface) = &*self.xdg_surface.borrow() {
             let _ = xdg_surface.request(XDG_SURFACE_ACK_CONFIGURE, &[Arg::Uint(serial)]);
         }
@@ -494,6 +526,76 @@ impl WaylandWindow {
             shared.push(WindowEvent::Focused(pending.activated));
         }
         self.wants_paint.set(true);
+    }
+
+    /// Applies the margin that the application asks for, or no margin
+    /// while the window is maximized, full screen, or tiled: then its
+    /// edges must meet the edges of the screen or of the other windows.
+    fn apply_margin(&self) {
+        let margin = {
+            let inner = self.inner.borrow();
+            let attached = inner.maximized || inner.full_screen || inner.tiled;
+            match inner.decoration_frame {
+                Some((margin, _)) if !attached => margin,
+                _ => Insets::default(),
+            }
+        };
+        if self.shared.margin.replace(margin) != margin {
+            self.shared.invalidate();
+            self.wants_paint.set(true);
+        }
+    }
+
+    /// The input region that the surface needs, in surface points: the
+    /// input area of a frame with a margin, else None.
+    fn wanted_input_region(&self, inner: &Inner) -> Option<Rect> {
+        if self.shared.margin.get() == Insets::default() {
+            return None;
+        }
+        let origin = self.shared.origin();
+        inner
+            .decoration_frame
+            .map(|(_, area)| area.translate(origin.x, origin.y))
+    }
+
+    /// Sends the input region when it changed. The commit that follows
+    /// applies it.
+    fn update_input_region(&self, client: &Client, inner: &mut Inner) {
+        let wanted = self.wanted_input_region(inner);
+        if wanted == inner.input_region {
+            return;
+        }
+        let globals = client.globals.borrow();
+        let region = match (wanted, &globals.compositor) {
+            (Some(area), Some(compositor)) => {
+                let Ok(Some(region)) = compositor.request(COMPOSITOR_CREATE_REGION, &[Arg::NewId])
+                else {
+                    return;
+                };
+                let x = area.origin.x.floor() as i32;
+                let y = area.origin.y.floor() as i32;
+                let _ = region.request(
+                    REGION_ADD,
+                    &[
+                        Arg::Int(x),
+                        Arg::Int(y),
+                        Arg::Int(area.max_x().ceil() as i32 - x),
+                        Arg::Int(area.max_y().ceil() as i32 - y),
+                    ],
+                );
+                Some(region)
+            }
+            (Some(_), None) => return,
+            (None, _) => None,
+        };
+        let _ = self
+            .surface
+            .request(SURFACE_SET_INPUT_REGION, &[Arg::Object(region.as_ref())]);
+        // The surface keeps a copy of the region.
+        if let Some(region) = region {
+            let _ = region.destroy(REGION_DESTROY, &[]);
+        }
+        inner.input_region = wanted;
     }
 
     /// Handles `zxdg_toplevel_decoration_v1.configure`.
@@ -632,7 +734,7 @@ impl WaylandWindow {
 
     /// The buffer size in pixels: the logical size times the scale.
     fn pixel_size(&self) -> (u32, u32) {
-        let (scale, size) = (self.scale(), self.shared.size.get());
+        let (scale, size) = (self.scale(), self.shared.bounds().size);
         (
             (size.width * scale).round().max(1.0) as u32,
             (size.height * scale).round().max(1.0) as u32,
@@ -683,10 +785,11 @@ impl WaylandWindow {
             return false;
         };
         let size = self.shared.size.get();
-        let result =
-            device.paint_window(window, &list, self.scale(), (width, height), region, || {
-                self.frame_requests(client, &mut self.inner.borrow_mut(), size)
-            });
+        let origin = self.shared.origin();
+        let scale = (self.scale(), origin);
+        let result = device.paint_window(window, &list, scale, (width, height), region, || {
+            self.frame_requests(client, &mut self.inner.borrow_mut(), size)
+        });
         drop(slot);
         match result {
             Ok(()) => {}
@@ -703,16 +806,19 @@ impl WaylandWindow {
         true
     }
 
-    /// Sends the size, the scale, and the frame callback of a frame. The
-    /// commit that follows applies them.
+    /// Sends the size, the scale, the window geometry, the input region,
+    /// and the frame callback of a frame. The commit that follows applies
+    /// them. `size` is the content, which the window geometry holds.
     fn frame_requests(&self, client: &Client, inner: &mut Inner, size: Size) {
+        let surface = self.shared.bounds().size;
+        let origin = self.shared.origin();
         match &*self.viewport.borrow() {
             Some(viewport) => {
                 let _ = viewport.request(
                     VIEWPORT_SET_DESTINATION,
                     &[
-                        Arg::Int(size.width.round() as i32),
-                        Arg::Int(size.height.round() as i32),
+                        Arg::Int(surface.width.round() as i32),
+                        Arg::Int(surface.height.round() as i32),
                     ],
                 );
             }
@@ -730,13 +836,14 @@ impl WaylandWindow {
             let _ = xdg_surface.request(
                 XDG_SURFACE_SET_WINDOW_GEOMETRY,
                 &[
-                    Arg::Int(0),
-                    Arg::Int(0),
+                    Arg::Int(origin.x.round() as i32),
+                    Arg::Int(origin.y.round() as i32),
                     Arg::Int(size.width.round() as i32),
                     Arg::Int(size.height.round() as i32),
                 ],
             );
         }
+        self.update_input_region(client, inner);
         if let Ok(token) = inner.frames.request() {
             match self.surface.request(SURFACE_FRAME, &[Arg::NewId]) {
                 Ok(Some(callback)) => {
@@ -789,7 +896,8 @@ impl WaylandWindow {
             height,
             stride,
         };
-        paint::paint(&list, &mut pixels, scale, region);
+        let origin = self.shared.origin();
+        paint::paint_at(&list, &mut pixels, scale, region, origin);
         buffer.busy = true;
         let id = buffer.proxy.id();
         let _ = self.surface.request(
@@ -798,10 +906,11 @@ impl WaylandWindow {
         );
         inner.buffers.mark_stale(region, id);
         // Damage in buffer pixels, rounded out.
-        let x = (region.origin.x * scale).floor() as i32;
-        let y = (region.origin.y * scale).floor() as i32;
-        let right = ((region.origin.x + region.size.width) * scale).ceil() as i32;
-        let bottom = ((region.origin.y + region.size.height) * scale).ceil() as i32;
+        let surface = region.translate(origin.x, origin.y);
+        let x = (surface.origin.x * scale).floor() as i32;
+        let y = (surface.origin.y * scale).floor() as i32;
+        let right = (surface.max_x() * scale).ceil() as i32;
+        let bottom = (surface.max_y() * scale).ceil() as i32;
         let _ = self.surface.request(
             SURFACE_DAMAGE_BUFFER,
             &[
@@ -998,6 +1107,9 @@ impl Surface for WaylandWindow {
         let Some((serial, client)) = self.press_serial() else {
             return;
         };
+        // The request takes surface-local coordinates.
+        let origin = self.shared.origin();
+        let position = Point::new(position.x + origin.x, position.y + origin.y);
         let seat = client.globals.borrow();
         if let (Some(toplevel), Some(seat)) = (&*self.toplevel.borrow(), &seat.seat) {
             let _ = toplevel.request(
@@ -1031,6 +1143,28 @@ impl Surface for WaylandWindow {
 
     fn server_decorations(&self) -> bool {
         self.inner.borrow().server_side
+    }
+
+    fn set_frame_margin(&self, margin: Insets, input_area: Rect) {
+        if self.is_popup() {
+            return;
+        }
+        let frame = Some((margin, input_area));
+        let changed = {
+            let mut inner = self.inner.borrow_mut();
+            std::mem::replace(&mut inner.decoration_frame, frame) != frame
+        };
+        if changed {
+            self.apply_margin();
+            // The input area can change while the margin stays. A paint
+            // sends it.
+            self.shared.invalidate();
+            self.wants_paint.set(true);
+        }
+    }
+
+    fn is_tiled(&self) -> bool {
+        self.inner.borrow().tiled
     }
 
     fn set_modal_parent(&self, parent: &Rc<WindowShared>) {

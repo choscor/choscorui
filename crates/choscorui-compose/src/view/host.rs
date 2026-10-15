@@ -1304,6 +1304,11 @@ impl ViewHost {
         }
     }
 
+    /// The recipe registry that the views paint with.
+    pub fn styles(&self) -> &Styles {
+        &self.inner.styles
+    }
+
     /// The recipe registry, for application-wide recipes.
     pub fn styles_mut(&mut self) -> &mut Styles {
         self.inner.needs_paint = true;
@@ -1380,11 +1385,17 @@ impl ViewHost {
 
     /// Lays out if needed and paints the whole tree.
     pub fn paint(&mut self) -> DisplayList {
+        let mut list = DisplayList::new();
+        self.paint_into(&mut list);
+        list
+    }
+
+    /// Lays out if needed and paints the whole tree after the commands
+    /// that `list` holds, such as a window frame below the views.
+    pub fn paint_into(&mut self, list: &mut DisplayList) {
         self.layout();
         self.inner.needs_paint = false;
-        let mut list = DisplayList::new();
-        super::paint::paint(&self.inner, &mut list);
-        list
+        super::paint::paint(&self.inner, list);
     }
 
     /// The window cursor over the hovered part, from the last paint: the

@@ -53,7 +53,16 @@ pub(super) fn show(
     );
     host.layout();
     let node = host.find(&spec.title)?;
-    let size = host.tree().bounds(node)?.size;
+    // A menu taller than the screen gets the height of the smallest
+    // screen, and its rows scroll. The compositor flips and slides it
+    // to keep it on the screen, and makes it smaller where it can.
+    let natural = host.tree().bounds(node)?.size;
+    let limit = (context.platform.screens().iter())
+        .map(|screen| screen.size.height)
+        .filter(|height| *height > 0.0)
+        .reduce(f64::min)
+        .unwrap_or(natural.height);
+    let size = Size::new(natural.width, natural.height.min(limit));
     host.resize(size);
     host.focus(Some(node));
     let parent = context

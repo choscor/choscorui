@@ -1,8 +1,9 @@
 //! The chrome that the toolkit draws on Wayland, driven with the virtual
 //! keyboard and pointer of `scripts/linux/headless-session.sh`: the
 //! in-window menu bar, its shortcuts and keys, a context menu in a popup,
-//! and, with `CHOSCORUI_DECORATIONS=client`, the title bar. It runs only
-//! with `CHOSCORUI_RUN_LINUX_SMOKE=1` on Wayland.
+//! and, with `CHOSCORUI_DECORATIONS=client`, the title bar and the frame
+//! around the content. It runs only with `CHOSCORUI_RUN_LINUX_SMOKE=1` on
+//! Wayland.
 
 #[cfg(target_os = "linux")]
 fn main() {
@@ -32,12 +33,15 @@ mod smoke {
     const K: u32 = 37;
     const ALT: u32 = 56;
     const F10: u32 = 68;
+    const END: u32 = 107;
     const DOWN: u32 = 108;
     const LEFT_BUTTON: u32 = 272;
     const RIGHT_BUTTON: u32 = 273;
 
     /// Where sway puts the window, in screen points.
     const ORIGIN: Point = Point::new(100.0, 100.0);
+    /// The height of the output of the headless session.
+    const SCREEN_HEIGHT: f64 = 800.0;
 
     pub fn run() {
         let app = App::new();
@@ -147,11 +151,37 @@ mod smoke {
         later(&["move 1000 700", "button 272 1", "button 272 0"]);
         assert_eq!(running.show_context_menu(window, &menu, at), None);
         assert!(menu.take_activations().is_empty());
+
+        // A menu taller than the screen gets the height of the screen,
+        // and its rows scroll: End shows the last row at the bottom, and
+        // a click there chooses it.
+        let long = ContextMenu::new(MenuSpec::new(
+            "Long",
+            (1..=60)
+                .map(|id| command(id, &format!("Row {id}")))
+                .collect(),
+        ))
+        .unwrap();
+        let bottom = SCREEN_HEIGHT - 6.0;
+        let x = screen(at).x + 20.0;
+        press_in_window(running, at);
+        later(&[
+            &format!("key {END} 1"),
+            &format!("key {END} 0"),
+            &format!("move {x} {bottom}"),
+            "button 272 1",
+            "button 272 0",
+        ]);
+        assert_eq!(
+            running.show_context_menu(window, &long, at),
+            Some(MenuCommandId(60))
+        );
     }
 
-    /// The drawn title bar moves the window and closes it.
+    /// The drawn title bar moves the window and closes it. The frame
+    /// around the content resizes it.
     fn title_bar(running: &mut AppContext, window: WindowId) {
-        let before = sway_x("Chrome");
+        let before = sway_rect("Chrome").origin.x;
         let title = bounds(running, window, "Chrome");
         let start = screen(Point::new(title.origin.x + 40.0, title.center().y));
         virtual_input(&format!("move {} {}", start.x, start.y));
@@ -165,11 +195,13 @@ mod smoke {
         }
         virtual_input(&format!("button {LEFT_BUTTON} 0"));
         pump(running, Duration::from_millis(300));
-        let after = sway_x("Chrome");
+        let after = sway_rect("Chrome").origin.x;
         assert!(
             after > before,
             "the drag moves the window: {before} -> {after}"
         );
+        place("Chrome", running);
+        frame(running, window);
         place("Chrome", running);
 
         let close = bounds(running, window, "Close");
@@ -183,6 +215,41 @@ mod smoke {
         }
     }
 
+    /// The window geometry is the content, without the margin of the
+    /// shadow. A drag that starts on the resize band at the left edge
+    /// resizes the window. Sway sends a floating window no input outside
+    /// its geometry, so the drag starts on the inner part of the band.
+    fn frame(running: &mut AppContext, window: WindowId) {
+        let size = running.native_window(window).unwrap().content_size();
+        let margin = running.native_window(window).unwrap().frame_margin();
+        assert!(
+            margin.left > 4.0 && margin.bottom > margin.top,
+            "{margin:?}"
+        );
+        let rect = sway_rect("Chrome");
+        assert_eq!(rect.origin, ORIGIN, "the geometry starts at the content");
+        assert_eq!(rect.size, size, "the geometry is the content");
+
+        let start = screen(Point::new(1.0, size.height / 2.0));
+        virtual_input(&format!("move {} {}", start.x, start.y));
+        pump(running, Duration::from_millis(100));
+        virtual_input(&format!("button {LEFT_BUTTON} 1"));
+        pump(running, Duration::from_millis(100));
+        for step in 1..=6 {
+            let x = start.x - f64::from(step) * 10.0;
+            virtual_input(&format!("move {x} {}", start.y));
+            pump(running, Duration::from_millis(60));
+        }
+        virtual_input(&format!("button {LEFT_BUTTON} 0"));
+        pump(running, Duration::from_millis(300));
+        let wider = running.native_window(window).unwrap().content_size();
+        assert!(
+            wider.width > size.width && wider.height == size.height,
+            "the drag on the left band resizes the window: {size:?} -> {wider:?}"
+        );
+        assert_eq!(sway_rect("Chrome").size, wider);
+    }
+
     /// Presses and releases the right button at `at` in the window: the
     /// popup's grab takes the serial of the press.
     fn press_in_window(running: &mut AppContext, at: Point) {
@@ -194,10 +261,11 @@ mod smoke {
     }
 
     /// Sends `commands` to the virtual input after the popup opens.
-    fn later(commands: &'static [&'static str]) {
+    fn later(commands: &[&str]) {
+        let commands: Vec<String> = commands.iter().map(|&command| command.to_owned()).collect();
         std::thread::spawn(move || {
             std::thread::sleep(Duration::from_millis(700));
-            for command in commands {
+            for command in &commands {
                 virtual_input(command);
                 std::thread::sleep(Duration::from_millis(50));
             }
@@ -267,13 +335,14 @@ mod smoke {
         pump(running, Duration::from_millis(300));
     }
 
-    /// The x position of the window titled `title` in sway's tree.
-    fn sway_x(title: &str) -> f64 {
+    /// The rectangle of the window titled `title` in sway's tree: the
+    /// window geometry of the surface, on the screen.
+    fn sway_rect(title: &str) -> Rect {
         let script = format!(
             "import json,sys\n\
              def walk(node):\n\
              \x20   if node.get('name') == '{title}':\n\
-             \x20       print(node['rect']['x']); sys.exit()\n\
+             \x20       r = node['rect']; print(r['x'], r['y'], r['width'], r['height']); sys.exit()\n\
              \x20   for child in node.get('nodes', []) + node.get('floating_nodes', []):\n\
              \x20       walk(child)\n\
              walk(json.load(sys.stdin))\n"
@@ -296,10 +365,14 @@ mod smoke {
             .write_all(&tree.stdout)
             .unwrap();
         let output = python.wait_with_output().unwrap();
-        String::from_utf8_lossy(&output.stdout)
-            .trim()
-            .parse()
-            .expect("sway knows the window")
+        let values: Vec<f64> = String::from_utf8_lossy(&output.stdout)
+            .split_whitespace()
+            .map(|value| value.parse().expect("a number"))
+            .collect();
+        let [x, y, width, height] = values[..] else {
+            panic!("sway knows the window");
+        };
+        Rect::from_xywh(x, y, width, height)
     }
 
     /// Sends one command to the virtual input of the headless session.

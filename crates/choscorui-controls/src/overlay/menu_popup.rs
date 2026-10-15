@@ -9,7 +9,7 @@ use crate::popup::{Placement, place_popup};
 use crate::style::{ControlKind, PaintContext, Slot, StyleQuery, VisualState};
 use crate::{CommandError, CommandId, CommandRegistry, CommandState};
 use choscorui_core::{
-    Key, LayoutDirection, Point, PointerEvent, Rect, SemanticParts, SemanticRole, WheelUnit,
+    Key, LayoutDirection, Point, PointerEvent, Rect, SemanticParts, SemanticRole, Size, WheelUnit,
 };
 
 /// An open or closed dropdown menu that a hosted control owns.
@@ -124,10 +124,17 @@ impl MenuPopup {
         self.reveal.set(false, time);
     }
 
+    /// The size of the root panel with all of its rows.
+    pub fn root_size(&self) -> Size {
+        self.menu.level_size(0, self.width)
+    }
+
     /// The panel of each open level, root first. The root opens below
     /// its anchor, and a submenu beside its row with the rows aligned.
     /// Each panel flips and moves to stay inside the bounds. A panel
     /// taller than the bounds gets their height, and its rows scroll.
+    /// A root panel in place is at most as tall as its anchor, and its
+    /// rows scroll in the same way.
     pub fn panels(&self) -> Vec<Rect> {
         self.levels().into_iter().map(|level| level.panel).collect()
     }
@@ -145,7 +152,12 @@ impl MenuPopup {
                 } else {
                     anchor.origin.x
                 };
-                Rect::from_xywh(x, anchor.origin.y, size.width, size.height)
+                let height = if anchor.size.height > 0.0 {
+                    size.height.min(anchor.size.height)
+                } else {
+                    size.height
+                };
+                Rect::from_xywh(x, anchor.origin.y, size.width, height)
             } else {
                 place_popup(anchor, size, self.bounds, preferred, self.direction).rect
             };
@@ -373,6 +385,20 @@ impl MenuPopup {
         if focused.is_some() {
             parts.set_focused(focused);
         }
+    }
+
+    /// Paints open level `level` in its panel, with its rows scrolled. A
+    /// submenu paints in the open state.
+    pub fn paint_level(&self, cx: &mut PaintContext<'_>, level: usize) {
+        let Some(LevelPanel { panel, rows }) = self.levels().get(level).copied() else {
+            return;
+        };
+        let mut panel_cx = cx.at(panel);
+        if level > 0 {
+            panel_cx.state = VisualState::OPEN;
+        }
+        self.menu
+            .paint_scrolled(&mut panel_cx, level, &self.commands, rows);
     }
 
     /// Paints every open panel with the reveal animation.

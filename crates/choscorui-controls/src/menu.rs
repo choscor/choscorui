@@ -793,12 +793,8 @@ impl CustomControl for HostedDropdownMenu {
     fn measure(&mut self, cx: &MeasureContext<'_>) -> Measured {
         let content = cx.style(StyleQuery::new(ControlKind::Menu, Slot::Content));
         self.popup.arrange(cx, content.min_width);
-        let size = self
-            .popup
-            .panels()
-            .first()
-            .map_or(Size::new(0.0, 0.0), |panel| panel.size);
-        Measured::new(cx.constraints.constrain(size))
+        // Less height than the rows need makes the rows scroll.
+        Measured::new(cx.constraints.constrain(self.popup.root_size()))
     }
 
     fn arrange(&mut self, cx: &MeasureContext<'_>, bounds: Rect) {
@@ -876,11 +872,7 @@ impl CustomControl for HostedDropdownMenu {
     }
 
     fn paint(&self, cx: &mut PaintContext<'_>) {
-        if let Some(panel) = self.popup.panels().first() {
-            self.popup
-                .menu
-                .paint(&mut cx.at(*panel), 0, &self.popup.commands);
-        }
+        self.popup.paint_level(cx, 0);
     }
 
     fn overlay(&self) -> Option<Rect> {
@@ -892,12 +884,8 @@ impl CustomControl for HostedDropdownMenu {
     }
 
     fn paint_overlay(&self, cx: &mut PaintContext<'_>) {
-        for (level, panel) in self.popup.panels().into_iter().enumerate().skip(1) {
-            let mut panel_cx = cx.at(panel);
-            panel_cx.state = VisualState::OPEN;
-            self.popup
-                .menu
-                .paint(&mut panel_cx, level, &self.popup.commands);
+        for level in 1..self.popup.menu.depth() {
+            self.popup.paint_level(cx, level);
         }
     }
 

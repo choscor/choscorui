@@ -1171,7 +1171,10 @@ impl Client {
                     .arg(1)
                     .object()
                     .and_then(|surface| self.window_of(surface));
-                let position = Point::new(event.arg(2).fixed(), event.arg(3).fixed());
+                let surface = Point::new(event.arg(2).fixed(), event.arg(3).fixed());
+                let position = window
+                    .as_ref()
+                    .map_or(surface, |window| window.content_point(surface));
                 {
                     let mut seat = self.seat.borrow_mut();
                     seat.enter_serial = event.arg(0).uint();
@@ -1190,7 +1193,10 @@ impl Client {
                 seat.clicks.reset();
             }
             POINTER_MOTION => {
-                let position = Point::new(event.arg(1).fixed(), event.arg(2).fixed());
+                let surface = Point::new(event.arg(1).fixed(), event.arg(2).fixed());
+                let position = self
+                    .pointer_window()
+                    .map_or(surface, |window| window.content_point(surface));
                 let allowed = {
                     let mut seat = self.seat.borrow_mut();
                     seat.position = position;

@@ -19,7 +19,7 @@ pub(crate) mod mask;
 use crate::ffi::cairo::{CairoFailure, Context, Format, Pattern, Surface};
 use choscorui_core::{
     Color, DisplayCommand, DisplayList, FillRule, Image, LineCap, LineJoin, Paint, Path,
-    PathElement, Rect, Size, StrokeStyle, Transform,
+    PathElement, Point, Rect, Size, StrokeStyle, Transform,
 };
 use std::fmt;
 
@@ -79,6 +79,21 @@ pub(crate) fn paint_into(
     scale: f64,
     clip: Option<Rect>,
 ) -> Result<(), CairoError> {
+    let origin = Point::new(0.0, 0.0);
+    paint_into_at(list, pixels, (width, height, stride), scale, clip, origin)
+}
+
+/// Paints `list` as [`paint_into`] does, with the point (0, 0) of the
+/// list at `origin` points from the top-left corner of the buffer. `clip`
+/// is in the coordinates of the list.
+pub(crate) fn paint_into_at(
+    list: &DisplayList,
+    pixels: &mut [u8],
+    (width, height, stride): (u32, u32, usize),
+    scale: f64,
+    clip: Option<Rect>,
+    origin: Point,
+) -> Result<(), CairoError> {
     if !scale.is_finite() || scale <= 0.0 {
         return Err(CairoError::InvalidScale);
     }
@@ -86,7 +101,8 @@ pub(crate) fn paint_into(
         return Ok(());
     }
     let surface = Surface::for_data(pixels, Format::Argb32, width, height, stride)?;
-    paint_surface(&surface, list, scale, clip)
+    let clip = clip.map(|rect| rect.translate(origin.x, origin.y));
+    paint_surface(&surface, list, scale, clip, origin)
 }
 
 /// Renders `list` at `size` points and `scale` pixels per point into a
@@ -131,12 +147,14 @@ fn straight_rgba(word: u32) -> [u8; 4] {
     [un(r), un(g), un(b), a]
 }
 
-/// Paints `list` into `surface`, inside the device pixels of `clip`.
+/// Paints `list` into `surface`, inside the device pixels of `clip`, with
+/// the point (0, 0) of the list at `origin`. `clip` is in buffer points.
 fn paint_surface(
     surface: &Surface<'_>,
     list: &DisplayList,
     scale: f64,
     clip: Option<Rect>,
+    origin: Point,
 ) -> Result<(), CairoError> {
     let context = Context::new(surface)?;
     let (width, height) = (surface.width() as f64, surface.height() as f64);
@@ -158,6 +176,7 @@ fn paint_surface(
     context.paint();
     context.set_clear(false);
     context.scale(scale, scale);
+    context.translate(origin.x, origin.y);
     let mut painter = Painter {
         context: &context,
         surface,

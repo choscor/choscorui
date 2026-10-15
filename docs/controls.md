@@ -2370,6 +2370,9 @@ this behavior.
 - **In a control host.** `hosted(name)` makes a `HostedDropdownMenu` with
   its own command states. The root level fills the node, and open
   submenus float beside it.
+- The menu measures the height of all of its rows. A node with less
+  height limits the root panel, and its rows scroll. The wheel scrolls
+  them, and a key scrolls the highlighted row into view.
 - An activated action reports `Command`. Escape at the root reports
   `Dismissed`. The menu then closes its submenus and stays in place.
 - **In a view.** The `context_menu` and `dropdown_menu` view modifiers
@@ -3038,8 +3041,17 @@ of the window under a point.
   maximized window.
 - `WindowFrame::paint` draws the background, the border, and the shadow
   of the window from the `Panel` slot. Paint it before the content.
+- **Margin.** `with_theme_edges(tokens)` sets the resize band of the
+  theme: two spacing units outside the frame and one unit inside it.
+- `margin(styles, tokens)` gives the surface margin around the frame. It
+  holds the active and the inactive `Panel` shadows and the outer band,
+  in whole points.
+- `input_area()` is the frame and its outer band. The shadow outside it
+  takes no input. A maximized frame has no margin, and only the frame
+  takes input.
 - The `decorations.txt` golden file pins the display list of the bar in
-  both directions: active, inactive, maximized, and a dialog bar.
+  both directions: active, inactive, maximized, and a dialog bar. It also
+  pins the margin, the input area, and the paint of the frame.
 
 | Part | Slot | Value |
 | --- | --- | --- |

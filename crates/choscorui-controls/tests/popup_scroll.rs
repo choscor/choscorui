@@ -1,11 +1,14 @@
 //! Menus, the date picker calendar, and navigation panels in a window
 //! that is too short for them: the window limits the popup, its content
-//! scrolls, and the highlighted or focused row stays in view.
+//! scrolls, and the highlighted or focused row stays in view. A menu in
+//! place, as in a popup window that the compositor made shorter, scrolls
+//! in its own bounds.
 
 mod hosted;
 
 use choscorui_controls::{
-    CalendarMode, CommandId, ContextMenu, DatePicker, MenuItem, NavigationLink, NavigationMenu,
+    CalendarMode, CommandId, ContextMenu, ControlMessage, DatePicker, DropdownMenu, MenuItem,
+    NavigationLink, NavigationMenu,
 };
 use choscorui_core::{
     CivilDate, DisplayCommand, DisplayList, Key, Locale, Point, PointerButton, PointerEvent, Rect,
@@ -126,6 +129,44 @@ fn a_long_submenu_fits_the_window_and_keeps_its_highlight_in_view() {
     h.key(Key::End);
     assert!(shows(&mut h, "Sub 29", frame));
     assert!(!shows(&mut h, "Sub 0", frame));
+}
+
+#[test]
+fn a_menu_in_place_with_less_height_than_its_rows_scrolls() {
+    let mut h = Harness::new(DropdownMenu::new(long_menu()).hosted("Actions"));
+    let natural = h.measure();
+    let bounds = rect(0.0, 0.0, natural.width, 200.0);
+    short_window(&mut h, 200.0, bounds);
+    // The control keeps asking for the height of all of its rows.
+    assert_eq!(h.measure(), natural);
+    assert!(shows(&mut h, "Item 0", bounds));
+    assert!(!shows(&mut h, "Item 29", bounds));
+
+    // Keys scroll the highlighted row into view.
+    h.focus();
+    h.key(Key::End);
+    assert!(shows(&mut h, "More", bounds));
+    assert!(!shows(&mut h, "Item 0", bounds));
+    h.key(Key::Home);
+    assert!(shows(&mut h, "Item 0", bounds));
+    for _ in 0..12 {
+        h.key(Key::ArrowDown);
+    }
+    assert!(shows(&mut h, "Item 12", bounds));
+    assert!(!shows(&mut h, "Item 0", bounds));
+
+    // The wheel scrolls, and a click chooses the row under the pointer.
+    wheel(&mut h, bounds.center(), 10_000.0);
+    assert!(shows(&mut h, "Item 29", bounds));
+    let list = h.paint();
+    let y = baseline(&list, "Item 29").expect("the row shows");
+    h.messages();
+    h.click(Point::new(bounds.center().x, y - 4.0));
+    assert!(
+        h.messages()
+            .contains(&ControlMessage::Command(CommandId(30))),
+        "the click chooses the scrolled row"
+    );
 }
 
 fn date(day: u8) -> CivilDate {

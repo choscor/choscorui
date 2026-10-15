@@ -1,10 +1,12 @@
 //! The client-side decorations: the display list of the title bar of a
 //! window and of a dialog, active, inactive, and maximized, in both
-//! directions. A right-to-left bar mirrors the order of the buttons.
+//! directions. A right-to-left bar mirrors the order of the buttons. The
+//! frame below the content pins its margin, input area, and paint.
 
 use super::{golden, rect};
 use choscorui::controls::{
-    ControlHost, EstimatedText, HostEnv, Styles, TitleBar, TitleBarButton, TitleBarHandle,
+    ControlHost, EstimatedText, HostEnv, PaintContext, Styles, TitleBar, TitleBarButton,
+    TitleBarHandle, WindowFrame,
 };
 use choscorui::core::{DesignTokens, DisplayList, LayoutDirection, ThemeResolver, Tree};
 use std::fmt::Write;
@@ -48,5 +50,29 @@ fn decorations() {
             }
         }
     }
+    frames(&mut out);
     golden("decorations", &out);
+}
+
+/// The frame below the content of a window: its margin, and its shadow,
+/// background, and border when active, inactive, and maximized. A frame
+/// has no direction.
+fn frames(out: &mut String) {
+    let tokens = DesignTokens::light();
+    let styles = Styles::new();
+    let window = rect(0.0, 0.0, 400.0, 300.0);
+    for (name, _, active, maximized) in &CASES[..3] {
+        let frame = WindowFrame::new(window, rect(0.0, 0.0, 400.0, 40.0), Vec::new())
+            .with_theme_edges(&tokens)
+            .with_maximized(*maximized);
+        writeln!(out, "# frame {name}").unwrap();
+        writeln!(out, "margin {:?}", frame.margin(&styles, &tokens)).unwrap();
+        writeln!(out, "input {:?}", frame.input_area()).unwrap();
+        let mut list = DisplayList::new();
+        let mut cx = PaintContext::new(&mut list, window, &tokens, &styles, &EstimatedText);
+        frame.paint(&mut cx, *active);
+        for command in list.commands() {
+            writeln!(out, "{command:?}").unwrap();
+        }
+    }
 }

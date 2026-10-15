@@ -1,15 +1,16 @@
 //! The window chrome of client-side decorations: the title bar requests,
-//! its keyboard and semantics, and the frame hit test.
+//! its keyboard and semantics, and the frame: its hit test, its margin,
+//! and its input area.
 
 mod hosted;
 
 use choscorui_controls::{
-    ControlMessage, ResizeEdge, ShortcutModifiers, Styles, TitleBar, TitleBarButton,
-    TitleBarHandle, TitleBarRequest, WindowFrame, WindowRegion,
+    ControlMessage, EstimatedText, PaintContext, ResizeEdge, ShortcutModifiers, Styles, TitleBar,
+    TitleBarButton, TitleBarHandle, TitleBarRequest, WindowFrame, WindowRegion,
 };
 use choscorui_core::{
-    DesignTokens, Key, KeyEvent, LayoutDirection, Point, PointerButton, PointerEvent, Rect,
-    SemanticAction, SemanticRole,
+    DesignTokens, DisplayList, Insets, Key, KeyEvent, LayoutDirection, Point, PointerButton,
+    PointerEvent, Rect, SemanticAction, SemanticRole,
 };
 use hosted::{Harness, rect, texts};
 
@@ -284,4 +285,63 @@ fn the_frame_finds_the_region_under_a_point() {
         maximized.region(Point::new(5.0, 5.0)),
         WindowRegion::Outside
     );
+}
+
+#[test]
+fn the_frame_margin_holds_the_shadow_and_the_outer_band() {
+    let tokens = DesignTokens::light();
+    let styles = Styles::new();
+    let window = rect(0.0, 0.0, 400.0, 300.0);
+    let frame =
+        WindowFrame::new(window, rect(0.0, 0.0, 400.0, 40.0), Vec::new()).with_theme_edges(&tokens);
+    assert_eq!(frame.outer_edge, tokens.space(2.0));
+    assert_eq!(frame.inner_edge, tokens.space(1.0));
+    let margin = frame.margin(&styles, &tokens);
+    for side in [margin.left, margin.top, margin.right, margin.bottom] {
+        assert!(side >= frame.outer_edge, "{margin:?}");
+        assert_eq!(side, side.ceil(), "whole points: {margin:?}");
+    }
+    // The active shadow drops below the frame, so the bottom is widest.
+    assert!(margin.bottom > margin.top, "{margin:?}");
+
+    // The paint stays inside the margin.
+    let mut list = DisplayList::new();
+    let mut cx = PaintContext::new(&mut list, window, &tokens, &styles, &EstimatedText);
+    frame.paint(&mut cx, true);
+    let surface = Rect::from_xywh(
+        -margin.left,
+        -margin.top,
+        400.0 + margin.left + margin.right,
+        300.0 + margin.top + margin.bottom,
+    );
+    let painted = list
+        .draw_regions()
+        .into_iter()
+        .map(|(_, region)| region)
+        .reduce(Rect::union)
+        .expect("the frame paints");
+    assert!(
+        surface.union(painted) == surface,
+        "{painted:?} in {surface:?}"
+    );
+
+    // The outer band takes input, and the shadow beyond it does not.
+    assert_eq!(
+        frame.input_area(),
+        rect(-8.0, -8.0, 416.0, 316.0),
+        "two spacing units around the frame"
+    );
+    assert_eq!(
+        frame.region(Point::new(-3.0, 150.0)),
+        WindowRegion::Resize(ResizeEdge::Left)
+    );
+    assert_eq!(
+        frame.region(Point::new(-12.0, 150.0)),
+        WindowRegion::Outside
+    );
+
+    // A maximized window has no margin, and only the frame takes input.
+    let maximized = frame.with_maximized(true);
+    assert_eq!(maximized.margin(&styles, &tokens), Insets::default());
+    assert_eq!(maximized.input_area(), window);
 }

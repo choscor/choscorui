@@ -1506,6 +1506,15 @@ pub fn paint(&mut self) -> DisplayList
 
 Lays out if needed and paints the whole tree.
 
+#### `ViewHost::paint_into`
+
+```rust
+pub fn paint_into(&mut self, list: &mut DisplayList)
+```
+
+Lays out if needed and paints the whole tree after the commands
+that `list` holds, such as a window frame below the views.
+
 #### `ViewHost::perform`
 
 ```rust
@@ -1628,6 +1637,14 @@ pub fn size(&self) -> Size
 ```
 
 The size of the root node after the last layout.
+
+#### `ViewHost::styles`
+
+```rust
+pub fn styles(&self) -> &Styles
+```
+
+The recipe registry that the views paint with.
 
 #### `ViewHost::styles_mut`
 

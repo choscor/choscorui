@@ -418,7 +418,7 @@ impl NativeWindow {
             };
         }
         if let Some(chrome) = &self.chrome {
-            closing |= chrome.sync(&self.window);
+            closing |= chrome.sync(&self.window, host);
         }
         let input = host.text_input();
         let active = input.is_some();
@@ -442,7 +442,14 @@ impl NativeWindow {
         let _ = self.window.set_title(title);
     }
 
-    pub(crate) fn present(&self, list: DisplayList) {
+    /// Paints `host` into the window, above the frame of a window with a
+    /// drawn title bar.
+    pub(crate) fn present(&self, host: &mut ViewHost) {
+        let mut list = DisplayList::new();
+        if let Some(chrome) = &self.chrome {
+            chrome.paint_frame(&self.window, host, &mut list);
+        }
+        host.paint_into(&mut list);
         self.window.set_display_list(list);
     }
 

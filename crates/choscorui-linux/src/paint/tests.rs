@@ -392,6 +392,34 @@ fn a_clip_limits_painting_and_clears_first() {
 }
 
 #[test]
+fn an_origin_moves_the_list_and_its_clip_into_the_margin() {
+    // A surface with a margin of 3 points at the left and 2 at the top,
+    // at scale 2: the content starts at device pixel (6, 4).
+    let (width, height) = (24u32, 16u32);
+    let stride = Format::Argb32.stride_for_width(width).unwrap();
+    let mut pixels = vec![0x55u8; stride * height as usize];
+    let mut list = DisplayList::new();
+    // The shadow of a frame paints at negative content coordinates.
+    list.fill_rect(Rect::from_xywh(-3.0, -2.0, 12.0, 8.0), Color::BLACK);
+    list.fill_rect(Rect::from_xywh(0.0, 0.0, 2.0, 2.0), Color::WHITE);
+    let clip = Rect::from_xywh(-3.0, -2.0, 6.0, 4.0);
+    let origin = Point::new(3.0, 2.0);
+    let size = (width, height, stride);
+    paint_into_at(&list, &mut pixels, size, 2.0, Some(clip), origin).unwrap();
+    let word = |pixels: &[u8], x: usize, y: usize| {
+        let at = y * stride + x * 4;
+        u32::from_ne_bytes(pixels[at..at + 4].try_into().unwrap())
+    };
+    assert_eq!(word(&pixels, 0, 0), 0xFF00_0000, "the margin");
+    assert_eq!(word(&pixels, 6, 4), 0xFFFF_FFFF, "the content origin");
+    assert_eq!(word(&pixels, 9, 7), 0xFFFF_FFFF);
+    assert_eq!(word(&pixels, 10, 7), 0xFF00_0000);
+    // The clip moves with the list: outside it, pixels keep their value.
+    assert_eq!(word(&pixels, 12, 4), 0x5555_5555);
+    assert_eq!(word(&pixels, 6, 8), 0x5555_5555);
+}
+
+#[test]
 fn a_bad_buffer_or_scale_is_an_error() {
     let list = background();
     let mut small = vec![0u8; 16];

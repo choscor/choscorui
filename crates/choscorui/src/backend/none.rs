@@ -8,9 +8,9 @@ use choscorui_compose::Runtime;
 use choscorui_compose::view::{AnyView, ViewHost};
 use choscorui_controls::{EstimatedText, TextMeasure};
 use choscorui_core::{
-    AnnouncementPriority, BackendCapabilities, CursorShape, DisplayList, Feedback, MenuBarModel,
-    MenuCommandId, MenuError, NoFeedback, Point, Rect, SemanticChange, SemanticEntry, Services,
-    Size, Support, WindowGeometry, WindowOptions,
+    AnnouncementPriority, BackendCapabilities, CursorShape, Feedback, MenuBarModel, MenuCommandId,
+    MenuError, NoFeedback, Point, Rect, SemanticChange, SemanticEntry, Services, Size, Support,
+    WindowGeometry, WindowOptions,
 };
 use std::rc::Rc;
 use std::time::Duration;
@@ -123,7 +123,10 @@ impl NativeWindow {
         title.clone_into(&mut self.title);
     }
 
-    pub(crate) fn present(&self, _list: DisplayList) {}
+    /// Paints `host`. Nothing shows it.
+    pub(crate) fn present(&self, host: &mut ViewHost) {
+        host.paint();
+    }
 
     pub(crate) fn set_cursor(&mut self, shape: CursorShape) {
         self.cursor = shape;

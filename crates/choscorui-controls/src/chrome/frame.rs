@@ -2,8 +2,8 @@
 //! the window a point is on, and the painted frame with its shadow.
 
 use super::{TitleBarButton, TitleBarRequest};
-use crate::style::{ControlKind, PaintContext, Slot, StyleQuery, VisualState};
-use choscorui_core::{Point, Rect};
+use crate::style::{ControlKind, PaintContext, Slot, StyleQuery, Styles, VisualState};
+use choscorui_core::{DesignTokens, Insets, Point, Rect};
 
 /// An edge or a corner of a window that an interactive resize moves.
 /// The sides are physical: a right-to-left layout does not mirror them.
@@ -62,7 +62,8 @@ pub struct WindowFrame {
     pub outer_edge: f64,
     /// How far the resize band reaches inside `frame`.
     pub inner_edge: f64,
-    /// A maximized window has no resize band, no corners, and no shadow.
+    /// A maximized, full-screen, or tiled window has no resize band, no
+    /// corners, and no shadow.
     pub maximized: bool,
 }
 
@@ -86,6 +87,13 @@ impl WindowFrame {
         self.outer_edge = outer.max(0.0);
         self.inner_edge = inner.max(0.0);
         self
+    }
+
+    /// The frame with the standard resize band of the theme: two spacing
+    /// units outside the frame and one unit inside it.
+    #[must_use]
+    pub fn with_theme_edges(self, tokens: &DesignTokens) -> Self {
+        self.with_resize_edges(tokens.space(2.0), tokens.space(1.0))
     }
 
     /// The frame of a maximized window, or of a window that is not.
@@ -125,6 +133,47 @@ impl WindowFrame {
             WindowRegion::TitleBar
         } else {
             WindowRegion::Client
+        }
+    }
+
+    /// The area that takes pointer input: the frame and its outer resize
+    /// band. The shadow outside it lets the input go to the window
+    /// below.
+    pub fn input_area(&self) -> Rect {
+        if self.maximized {
+            self.frame
+        } else {
+            grow(self.frame, self.outer_edge)
+        }
+    }
+
+    /// The margin that the window surface needs outside `frame`: room
+    /// for the shadow of the `TitleBar` `Panel` slot, active or inactive,
+    /// and for the outer resize band. The sides are whole points. A
+    /// maximized frame needs no margin.
+    pub fn margin(&self, styles: &Styles, tokens: &DesignTokens) -> Insets {
+        if self.maximized {
+            return Insets::default();
+        }
+        let frame = self.frame;
+        let mut margin = Insets::all(self.outer_edge);
+        for active in [true, false] {
+            let state = VisualState::NONE.set(VisualState::FOCUSED, active);
+            let query = StyleQuery::new(ControlKind::TitleBar, Slot::Panel).state(state);
+            let style = styles.resolve(tokens, query);
+            for shadow in style.shadow.iter().filter(|shadow| !shadow.inset) {
+                let area = shadow.bounds(frame);
+                margin.left = margin.left.max(frame.min_x() - area.min_x());
+                margin.top = margin.top.max(frame.min_y() - area.min_y());
+                margin.right = margin.right.max(area.max_x() - frame.max_x());
+                margin.bottom = margin.bottom.max(area.max_y() - frame.max_y());
+            }
+        }
+        Insets {
+            left: margin.left.ceil(),
+            top: margin.top.ceil(),
+            right: margin.right.ceil(),
+            bottom: margin.bottom.ceil(),
         }
     }
 

@@ -9,13 +9,14 @@ use choscorui_compose::view::{
 };
 use choscorui_compose::{Property, Runtime};
 use choscorui_controls::{
-    CommandId, CommandState, MenuCheck, MenuItem, MenuItemVariant, ResizeEdge as FrameEdge,
-    Shortcut, ShortcutModifiers, TitleBarHandle, TitleBarRequest, WindowFrame, WindowRegion,
-    shortcut_label,
+    CommandId, CommandState, EstimatedText, MenuCheck, MenuItem, MenuItemVariant, PaintContext,
+    ResizeEdge as FrameEdge, Shortcut, ShortcutModifiers, TitleBarHandle, TitleBarRequest,
+    WindowFrame, WindowRegion, shortcut_label,
 };
 use choscorui_core::{
-    CursorShape, Key, KeyConvention, KeyEvent, MenuBarModel, MenuCommandId, MenuEntry,
-    MenuShortcut, MenuShortcutModifiers, Point, PointerButton, PointerEvent, Rect,
+    CursorShape, DesignTokens, DisplayList, Key, KeyConvention, KeyEvent, MenuBarModel,
+    MenuCommandId, MenuEntry, MenuShortcut, MenuShortcutModifiers, Point, PointerButton,
+    PointerEvent, Rect,
 };
 use choscorui_linux::{MainMenu, ResizeEdge, Window};
 use std::cell::RefCell;
@@ -111,8 +112,24 @@ impl Chrome {
         (chrome, AnyView::new(view))
     }
 
+    /// The frame of `window` in content coordinates, with the resize band
+    /// of the theme. A maximized, full-screen, or tiled window has no
+    /// band and no margin.
+    fn window_frame(window: &Window, tokens: &DesignTokens) -> WindowFrame {
+        let geometry = window.geometry();
+        let attached = geometry.zoomed || geometry.full_screen || window.is_tiled();
+        WindowFrame::new(
+            Rect::new(Point::new(0.0, 0.0), window.content_size()),
+            Rect::default(),
+            Vec::new(),
+        )
+        .with_theme_edges(tokens)
+        .with_maximized(attached)
+    }
+
     /// Handles a pointer event before the views: a primary press on the
-    /// resize band starts a resize. Returns true when it used the event.
+    /// resize band, inside the frame or in the margin around it, starts a
+    /// resize. Returns true when it used the event.
     pub(super) fn pointer(
         &mut self,
         window: &Window,
@@ -122,15 +139,7 @@ impl Chrome {
         if self.title_bar.is_none() {
             return false;
         }
-        let geometry = window.geometry();
-        let band = host.themes().application().spacing;
-        let frame = WindowFrame::new(
-            Rect::new(Point::new(0.0, 0.0), window.content_size()),
-            Rect::default(),
-            Vec::new(),
-        )
-        .with_resize_edges(0.0, band)
-        .with_maximized(geometry.zoomed);
+        let frame = Self::window_frame(window, &host.themes().application());
         self.hover = match frame.region(event.position()) {
             WindowRegion::Resize(edge) => Some(native_edge(edge)),
             _ => None,
@@ -220,11 +229,15 @@ impl Chrome {
     }
 
     /// Runs the title bar's requests on `window` and shows the window's
-    /// state in the bar. Returns true when the bar asked to close.
-    pub(super) fn sync(&self, window: &Window) -> bool {
+    /// state in the bar. It gives the surface a margin for the shadow and
+    /// the outer resize band. Returns true when the bar asked to close.
+    pub(super) fn sync(&self, window: &Window, host: &ViewHost) -> bool {
         let Some(handle) = &self.title_bar else {
             return false;
         };
+        let tokens = host.themes().application();
+        let frame = Self::window_frame(window, &tokens);
+        window.set_frame_margin(frame.margin(host.styles(), &tokens), frame.input_area());
         let mut closing = false;
         for request in handle.take_requests() {
             match request {
@@ -242,6 +255,18 @@ impl Chrome {
         handle.set_maximized(window.geometry().zoomed);
         handle.set_active(self.active);
         closing
+    }
+
+    /// Paints the frame of a window with a drawn title bar into `list`:
+    /// the shadow, the background, and the border, below the views.
+    pub(super) fn paint_frame(&self, window: &Window, host: &ViewHost, list: &mut DisplayList) {
+        if self.title_bar.is_none() {
+            return;
+        }
+        let tokens = host.themes().application();
+        let frame = Self::window_frame(window, &tokens);
+        let mut cx = PaintContext::new(list, frame.frame, &tokens, host.styles(), &EstimatedText);
+        frame.paint(&mut cx, self.active);
     }
 
     /// The cursor over the resize band, or `shape` from the views.

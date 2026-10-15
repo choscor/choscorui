@@ -17,7 +17,7 @@ mod shaders;
 use crate::ffi::egl::{EglContext, EglDisplay, EglFailure, EglSurface};
 use crate::ffi::gles::{Gl, TextureFormat};
 use crate::ffi::wayland::{Connection, Proxy};
-use choscorui_core::{DisplayList, Image, Rect, Size};
+use choscorui_core::{DisplayList, Image, Point, Rect, Size};
 use renderer::{Area, PaintIssue, Renderer, Target};
 use std::cell::RefCell;
 use std::collections::VecDeque;
@@ -175,20 +175,31 @@ impl Device {
         })
     }
 
-    /// Paints `list` into `window` at `scale`, and shows it. `region` is
-    /// the logical region that changed. `commit` runs just before the
-    /// swap, which commits the `wl_surface`. A failure marks the GLES
-    /// painter as failed in this process.
+    /// Paints `list` into `window` at `scale`, and shows it. The point
+    /// (0, 0) of the list is at `origin` points from the top-left corner
+    /// of the surface, which has a margin around the content when
+    /// `origin` is not zero. `region` is the region that changed, in list
+    /// coordinates. `commit` runs just before the swap, which commits the
+    /// `wl_surface`. A failure marks the GLES painter as failed in this
+    /// process.
     pub(crate) fn paint_window(
         &self,
         window: &mut GlesWindow,
         list: &DisplayList,
-        scale: f64,
+        (scale, origin): (f64, Point),
         (width, height): (u32, u32),
         region: Rect,
         commit: impl FnOnce(),
     ) -> Result<(), GlesError> {
-        let result = self.try_paint_window(window, list, scale, (width, height), region, commit);
+        let region = region.translate(origin.x, origin.y);
+        let result = self.try_paint_window(
+            window,
+            list,
+            (scale, origin),
+            (width, height),
+            region,
+            commit,
+        );
         match &result {
             Err(GlesError::TextUnavailable) => {}
             Err(error) => mark_failed(error),
@@ -201,7 +212,7 @@ impl Device {
         &self,
         window: &mut GlesWindow,
         list: &DisplayList,
-        scale: f64,
+        (scale, origin): (f64, Point),
         (width, height): (u32, u32),
         region: Rect,
         commit: impl FnOnce(),
@@ -237,7 +248,7 @@ impl Device {
         let painted = self
             .renderer
             .borrow_mut()
-            .paint(list, target, scale, Some(area));
+            .paint_at(list, target, scale, origin, Some(area));
         if let Err(PaintIssue::Gl(_)) = painted {
             return Err(GlesError::PaintFailed);
         }

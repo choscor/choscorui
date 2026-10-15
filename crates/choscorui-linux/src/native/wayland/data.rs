@@ -503,11 +503,12 @@ impl Client {
             .arg(1)
             .object()
             .and_then(|surface| self.window_of(surface));
-        let position = Point::new(event.arg(2).fixed(), event.arg(3).fixed());
+        let surface = Point::new(event.arg(2).fixed(), event.arg(3).fixed());
         let offer = event.arg(4).object();
         let Some(window) = window else {
             return;
         };
+        let position = window.content_point(surface);
         let accepts = {
             let target = window.shared.drop_target.borrow();
             (!target.formats.is_empty() && !target.operations.is_empty())
@@ -600,16 +601,21 @@ impl Client {
         }
     }
 
-    fn drag_motion(&self, position: Point) {
-        let (window, allowed) = {
+    fn drag_motion(&self, surface: Point) {
+        let (window, allowed, position) = {
             let mut data = self.data.borrow_mut();
             let Some(incoming) = &mut data.incoming else {
                 return;
             };
+            let window = incoming.window.upgrade();
+            let position = window
+                .as_ref()
+                .map_or(surface, |window| window.content_point(surface));
             incoming.position = position;
             (
-                incoming.window.upgrade(),
+                window,
                 incoming.accepted.as_ref().map(|(_, allowed, _)| *allowed),
+                position,
             )
         };
         if let (Some(window), Some(allowed)) = (window, allowed) {
