@@ -1,5 +1,5 @@
 //! The native backend: windows, input, and the event loop on Wayland
-//! (and X11). It compiles only for Linux.
+//! and X11. It compiles only for Linux.
 //!
 //! One UI thread owns everything. `Application::dispatch_next_event`
 //! paints the windows that are ready, sends the requests, and polls the
@@ -15,6 +15,7 @@ mod transfer;
 mod types;
 mod wayland;
 mod window;
+mod x11;
 
 pub use clipboard::SystemClipboard;
 pub use event_loop::{PostError, Poster, Timer};
@@ -61,6 +62,7 @@ fn selection_error(error: BackendSelectionError) -> Error {
 #[derive(Clone)]
 enum Display {
     Wayland(Rc<wayland::Client>),
+    X11(Rc<x11::Client>),
 }
 
 impl Display {
@@ -88,14 +90,13 @@ impl Display {
     }
 
     fn connect_x11() -> Result<Self, Error> {
-        Err(Error::NoDisplay(
-            "the X11 backend is not available".to_owned(),
-        ))
+        x11::Client::connect().map(Self::X11)
     }
 
     fn kind(&self) -> BackendKind {
         match self {
             Self::Wayland(_) => BackendKind::Wayland,
+            Self::X11(_) => BackendKind::X11,
         }
     }
 
@@ -103,12 +104,14 @@ impl Display {
     fn has_data_transfer(&self) -> bool {
         match self {
             Self::Wayland(client) => client.has_data_device(),
+            Self::X11(_) => false,
         }
     }
 
     fn set_selection(&self, payload: transfer::Payload) -> Result<(), Error> {
         match self {
             Self::Wayland(client) => client.set_selection(payload),
+            Self::X11(_) => Err(Error::ClipboardWriteFailed),
         }
     }
 
@@ -121,6 +124,7 @@ impl Display {
                     transfer::formats(&mimes, &mut |mime| client.receive(id, mime))
                 }
             },
+            Self::X11(_) => Vec::new(),
         }
     }
 
@@ -136,6 +140,7 @@ impl Display {
                     transfer::read(formats, &mimes, &mut |mime| client.receive(id, mime))
                 }
             },
+            Self::X11(_) => Vec::new(),
         }
     }
 }
@@ -205,6 +210,9 @@ impl Application {
             Display::Wayland(client) => {
                 client.create_window(Rc::clone(&shared), &self.app_id.borrow())?
             }
+            Display::X11(client) => {
+                client.create_window(Rc::clone(&shared), &self.app_id.borrow())?
+            }
         };
         let mut windows = self.windows.borrow_mut();
         windows.retain(|window| window.upgrade().is_some_and(|window| !window.closed.get()));
@@ -216,6 +224,7 @@ impl Application {
     pub fn window_count(&self) -> usize {
         match &self.display {
             Display::Wayland(client) => client.window_count(),
+            Display::X11(client) => client.window_count(),
         }
     }
 
@@ -280,6 +289,7 @@ impl Application {
         ];
         let ready = match &self.display {
             Display::Wayland(client) => client.wait(&extra, Some(timeout))?,
+            Display::X11(client) => client.wait(&extra, Some(timeout))?,
         };
         let mut handled = ready.iter().any(|ready| ready.read);
         handled |= self.posted.run();
@@ -296,6 +306,10 @@ impl Application {
         }
         match &self.display {
             Display::Wayland(client) => {
+                client.paint();
+                client.flush();
+            }
+            Display::X11(client) => {
                 client.paint();
                 client.flush();
             }
@@ -329,6 +343,7 @@ impl Application {
     pub fn screens(&self) -> Vec<Rect> {
         match &self.display {
             Display::Wayland(client) => client.screens(),
+            Display::X11(client) => client.screens(),
         }
     }
 }

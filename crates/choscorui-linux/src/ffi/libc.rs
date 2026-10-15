@@ -55,7 +55,8 @@ super::macros::c_consts! {
 }
 
 super::macros::libc_functions! {
-    headers: ["poll.h", "unistd.h", "fcntl.h", "sys/eventfd.h", "sys/timerfd.h", "sys/mman.h", "sys/shm.h", "errno.h", "time.h"];
+    headers: ["stdlib.h", "poll.h", "unistd.h", "fcntl.h", "sys/eventfd.h", "sys/timerfd.h", "sys/mman.h", "sys/shm.h", "errno.h", "time.h"];
+    fn free(pointer: *mut c_void);
     fn poll(fds: *mut PollFd, count: u64, timeout: CInt) -> CInt;
     fn read(fd: CInt, buffer: *mut c_void, count: usize) -> isize;
     fn write(fd: CInt, buffer: *const c_void, count: usize) -> isize;
@@ -76,6 +77,18 @@ super::macros::libc_functions! {
 super::macros::opaque_types! {
     /// `struct shmid_ds`, which the crate never reads.
     pub(crate) ShmidDs = "struct shmid_ds";
+}
+
+/// Frees memory that a C library allocated with `malloc`, such as an XCB
+/// reply or event.
+///
+/// # Safety
+///
+/// `pointer` is null or came from `malloc`, and nothing uses it after the
+/// call.
+pub(crate) unsafe fn free_malloc(pointer: *mut c_void) {
+    // SAFETY: the caller guarantees a `malloc` pointer or null.
+    unsafe { free(pointer) }
 }
 
 /// The result of a C call that returns -1 and sets `errno` on failure.
@@ -426,17 +439,9 @@ impl SysvSegment {
         self.id.cast_unsigned()
     }
 
-    pub(crate) fn len(&self) -> usize {
-        self.length
-    }
-
-    pub(crate) fn bytes(&self) -> &[u8] {
-        // SAFETY: the segment is attached for `length` bytes until drop.
-        unsafe { std::slice::from_raw_parts(self.address.cast::<u8>(), self.length) }
-    }
-
     pub(crate) fn bytes_mut(&mut self) -> &mut [u8] {
-        // SAFETY: as above, and `&mut self` excludes other borrows.
+        // SAFETY: the segment is attached for `length` bytes until drop,
+        // and `&mut self` excludes other borrows.
         unsafe { std::slice::from_raw_parts_mut(self.address.cast::<u8>(), self.length) }
     }
 }

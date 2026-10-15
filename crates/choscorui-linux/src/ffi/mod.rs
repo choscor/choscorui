@@ -24,6 +24,7 @@ pub(crate) mod freetype;
 pub(crate) mod harfbuzz;
 pub(crate) mod libc;
 pub(crate) mod wayland;
+pub(crate) mod x11;
 pub(crate) mod xkb;
 
 pub use dl::LoadError;
@@ -53,6 +54,7 @@ pub(crate) fn declarations() -> (
         cairo::sys::Cairo::check_items(),
     ];
     libraries.extend(codecs::check_items());
+    libraries.extend(x11::check_items());
     let mut structs = vec![
         libc::PollFd::layout(),
         libc::Timespec::layout(),
@@ -70,6 +72,7 @@ pub(crate) fn declarations() -> (
         cairo::sys::CairoUserDataKey::layout(),
     ];
     structs.extend(codecs::layouts());
+    structs.extend(x11::layouts());
     let constants = [
         libc::constants(),
         wl::constants(),
@@ -82,6 +85,7 @@ pub(crate) fn declarations() -> (
         fontconfig::FcResult::constants(),
         fontconfig::FcMatchKind::constants(),
         cairo::sys::constants(),
+        x11::all_constants(),
     ]
     .into_iter()
     .flatten()
