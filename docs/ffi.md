@@ -241,3 +241,16 @@ The [`choscorui-macos` README](../crates/choscorui-macos/README.md) describes th
 The native smoke tests create real windows, so they run only when `CHOSCORUI_RUN_MACOS_SMOKE=1` is set. [CONTRIBUTING.md](../CONTRIBUTING.md) lists the commands.
 
 The tests check window construction, title, visibility, resize, scale, and close events. They also check event isolation between two windows, posted work, timers, input translation, scroll units, `drawRect:` calls, panic containment, and loop stop.
+
+## Linux image codecs
+
+`choscorui-linux` loads the codec libraries with `dlopen` through `libraries!` in `src/ffi/codecs/`. Each format has one module with a safe decoder. The format detection, the EXIF orientation, and the pixel conversion are in `src/imaging.rs`, outside `ffi`.
+
+- **Errors.** No codec call long-jumps across a Rust frame or exits the process. libpng runs only through its simplified API, which catches its errors inside libpng and returns 0.
+- **Results.** TurboJPEG returns -1, and `tjGetErrorCode` tells a warning from an error. giflib, libtiff, and libwebp return 0 or null. libheif returns `struct heif_error` by value.
+- **Ownership.** A guard frees each object on drop: `png_image_free`, `tjDestroy`, `DGifCloseFile`, `TIFFClose`, `WebPFree`, `heif_context_free`, `heif_image_handle_release`, and `heif_image_release`. Each decoder copies the pixels into a `Vec` before its guards drop.
+- **Input.** libheif reads the borrowed bytes without a copy, and the context drops before the decoder returns. giflib and libtiff read an `Input` cursor through callbacks. The cursor lives longer than the open file.
+- **Callbacks.** The giflib input callback and the libtiff read, write, seek, close, size, map, and unmap procedures use `callback!`. A panic returns a failure value, so the decode fails.
+- **Messages.** The first TIFF decode sets null libtiff error and warning handlers for the process. Thus, libtiff writes nothing to standard error.
+- **Threads.** Each decode makes its own decoder objects, so decode and encode work on any thread.
+- **Tests.** `tests/codecs.rs` decodes a fixture of each format and damaged data. It also hides libtiff with `CHOSCORUI_TEST_HIDE_LIB` in a child process.

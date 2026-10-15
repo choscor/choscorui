@@ -4,12 +4,17 @@
 //! `FrameScheduler`, `X11Window`, `LinuxInput`, and `Clipboard`) are
 //! platform-neutral and compile on every host. The native backend
 //! compiles only for Linux. All of its `unsafe` code is in `ffi`.
+//!
+//! On Linux, `decode_image` and `encode_png` convert between encoded
+//! images and `choscorui_core::Image` with the system codec libraries.
 
 #![deny(unsafe_code)]
 
 mod backend;
 mod clipboard;
 mod frame;
+#[cfg(target_os = "linux")]
+mod imaging;
 mod input;
 mod wayland;
 mod x11;
@@ -17,6 +22,8 @@ mod x11;
 pub use backend::*;
 pub use clipboard::*;
 pub use frame::*;
+#[cfg(target_os = "linux")]
+pub use imaging::{decode_image, encode_png, image_codecs_support};
 pub use input::*;
 pub use wayland::*;
 pub use x11::*;

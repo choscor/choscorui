@@ -2,7 +2,7 @@
 
 Not supported. The crate compiles and has tested contracts.
 
-The `choscorui-linux` crate has platform-neutral state machines for the Wayland and X11 protocols. It has no native calls, and the facade does not use it. On Linux, `choscorui::platform` does not exist, and `choscorui::capabilities()` returns `Unsupported` for every capability.
+The `choscorui-linux` crate has platform-neutral state machines for the Wayland and X11 protocols. On Linux, it also decodes and encodes images with the system codec libraries. The facade does not use it. On Linux, `choscorui::platform` does not exist, and `choscorui::capabilities()` returns `Unsupported` for every capability.
 
 The state machines compile and run on every host. [`tests/protocol_contracts.rs`](../crates/choscorui-linux/tests/protocol_contracts.rs) pins each rule in this document.
 
@@ -85,6 +85,28 @@ When the seat loses the keyboard, the input clears the pressed keys. A removed d
 - `receive_offer(mime_types)` records the MIME types that another client offers. `read(mime_type)` returns `ClipboardError::NoOffer` without an offer, and `ClipboardError::MimeUnavailable` for a type that the offer does not have.
 - `claim(mime_types)` takes ownership of the selection with the given types. An empty list returns `ClipboardError::EmptySource`.
 - `owns_selection` tells you if the application owns the selection. `ownership_lost` clears the ownership when another client claims the selection.
+
+## Image codecs
+
+On Linux, `decode_image(bytes)` gives straight-alpha sRGB RGBA8 pixels, as the macOS backend does. The first bytes select the format and its library:
+
+| Format | Signature | Library |
+| --- | --- | --- |
+| PNG | `\x89PNG\r\n\x1a\n` | libpng16 (`libpng16.so.16`) |
+| JPEG | `FF D8 FF` | libturbojpeg (`libturbojpeg.so.0`) |
+| GIF, first frame | `GIF87a` or `GIF89a` | giflib (`libgif.so.7`) |
+| TIFF | `II*\0`, `MM\0*`, or BigTIFF | libtiff (`libtiff.so.6` or `libtiff.so.5`) |
+| WebP, still images | `RIFF` and `WEBP` | libwebp (`libwebp.so.7`) |
+| HEIC and HEIF | an `ftyp` box with a HEIF brand | libheif (`libheif.so.1`) |
+
+- A JPEG file turns as its EXIF `Orientation` tag tells. libheif applies the rotation and mirror properties of a HEIF file. libtiff applies the orientation tag of a TIFF file.
+- A GIF frame shows on its logical screen. The pixels outside the frame, and the transparent index, are transparent.
+- Unknown bytes, and a format whose library does not load, return `ImageError::UnsupportedFormat`. Damaged data returns `ImageError::DecodeFailed`.
+- An image of more than 64 Mpx returns `ImageError::InvalidDimensions`.
+- An animated WebP file returns `ImageError::DecodeFailed`, because the simple libwebp API decodes only still images.
+- The decoders do not convert embedded ICC profiles. libpng converts the PNG gamma to sRGB.
+- `encode_png(image)` writes an sRGB PNG file with libpng.
+- `image_codecs_support()` is `Supported` when libpng and libturbojpeg load.
 
 ## Not implemented
 
