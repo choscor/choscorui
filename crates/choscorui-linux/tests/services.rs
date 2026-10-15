@@ -114,6 +114,25 @@ fn without_a_bus_every_bus_service_is_unsupported() {
 }
 
 #[test]
+fn focus_changes_and_launch_arguments_become_desktop_events() {
+    let services = NativeServices::with_connection(None, options(false));
+    services
+        .open_launch_arguments(["--flag", "/tmp/a.txt", "https://example.com/"].map(Into::into));
+    services.set_active(true);
+    services.set_active(true);
+    services.set_active(false);
+    assert_eq!(
+        services.take_events(),
+        vec![
+            DesktopEvent::OpenFiles(vec![PathBuf::from("/tmp/a.txt")]),
+            DesktopEvent::OpenUrls(vec!["https://example.com/".to_owned()]),
+            DesktopEvent::Activated,
+            DesktopEvent::Deactivated,
+        ]
+    );
+}
+
+#[test]
 fn an_empty_bus_offers_only_the_conditional_status_item() {
     let bus = TestBus::start();
     let services = services(&bus, false);

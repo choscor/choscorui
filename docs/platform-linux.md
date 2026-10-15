@@ -165,6 +165,14 @@ The cursor of a window comes from the first source that the compositor allows:
 
 The theme loads at the integer scale of the window under the pointer, and the cursor surface has that buffer scale. When the theme has no cursor of the shape, the cursors that libwayland-cursor has built in show.
 
+## Application events
+
+The facade queues these `DesktopEvent`s on the Linux services:
+
+- `OpenFiles` and `OpenUrls` for the files and URLs in the command-line arguments at launch. An argument that starts with `-` is an option, until the argument `--`.
+- `Activated` when a window of the application gets the keyboard focus, and `Deactivated` when no window has it. An activation also reads the appearance settings again.
+- `Reopen` when the desktop calls `org.freedesktop.Application.Activate`. Its `has_visible_windows` tells if a window of the application shows.
+
 ## Alert sound
 
 `Application::beep()` plays the alert sound of the controls. It uses the first source that works:

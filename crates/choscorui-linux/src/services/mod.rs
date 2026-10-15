@@ -115,6 +115,8 @@ pub struct NativeServices {
     application: Option<ApplicationService>,
     events: EventQueue,
     visible_windows: Rc<Cell<bool>>,
+    /// True while a window of the application has the keyboard focus.
+    active: Cell<bool>,
     parent_window: RefCell<String>,
     file_dialog_fallback: RefCell<Option<FileDialogFallback>>,
     clipboard: RefCell<Option<Box<dyn TextClipboard>>>,
@@ -158,6 +160,7 @@ impl NativeServices {
             application: None,
             events: Rc::clone(&events),
             visible_windows: Rc::clone(&visible_windows),
+            active: Cell::new(false),
             parent_window: RefCell::default(),
             file_dialog_fallback: RefCell::default(),
             clipboard: RefCell::default(),
@@ -218,6 +221,29 @@ impl NativeServices {
     /// unsupported.
     pub fn set_clipboard(&self, clipboard: Option<Box<dyn TextClipboard>>) {
         *self.clipboard.borrow_mut() = clipboard;
+    }
+
+    /// Records whether a window of the application has the keyboard
+    /// focus. A change queues `Activated` or `Deactivated`; an activation
+    /// also reads the appearance settings again.
+    pub fn set_active(&self, active: bool) {
+        if self.active.replace(active) == active {
+            return;
+        }
+        if active {
+            self.reload_appearance();
+        }
+        self.events.borrow_mut().push_back(if active {
+            DesktopEvent::Activated
+        } else {
+            DesktopEvent::Deactivated
+        });
+    }
+
+    /// Queues `OpenFiles` and `OpenUrls` for the files and URLs in the
+    /// command-line arguments, without the program name.
+    pub fn open_launch_arguments(&self, args: impl IntoIterator<Item = std::ffi::OsString>) {
+        self.events.borrow_mut().extend(launch_events(args));
     }
 
     /// Whether a window shows, for `DesktopEvent::Reopen`.

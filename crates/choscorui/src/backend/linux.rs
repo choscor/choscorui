@@ -133,6 +133,7 @@ impl Platform {
         if capabilities().clipboard.is_supported() {
             services.set_clipboard(Some(Box::new(Selection(application.clipboard()))));
         }
+        services.open_launch_arguments(std::env::args_os().skip(1));
         if let Some(bus) = services.connection() {
             application.attach_bus(bus.clone());
         }
@@ -184,6 +185,9 @@ impl Platform {
             eprintln!("choscorui: {error}");
             std::thread::sleep(timeout);
         }
+        self.services.set_active(self.application.is_active());
+        self.services
+            .set_has_visible_windows(self.application.has_visible_windows());
         // Portal dialogs open over the focused window.
         if let Some(handle) = self.application.focused_window_handle() {
             self.services.set_parent_window(handle);

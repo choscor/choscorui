@@ -293,6 +293,27 @@ impl Application {
         }
     }
 
+    /// True when a window of the application has the keyboard focus.
+    pub fn is_active(&self) -> bool {
+        self.live_windows().any(|window| window.focused.get())
+    }
+
+    /// True when a window of the application shows.
+    pub fn has_visible_windows(&self) -> bool {
+        self.live_windows().any(|window| window.visible.get())
+    }
+
+    /// The windows that are open.
+    fn live_windows(&self) -> impl Iterator<Item = Rc<WindowShared>> {
+        self.windows
+            .borrow()
+            .iter()
+            .filter_map(std::rc::Weak::upgrade)
+            .filter(|window| !window.closed.get())
+            .collect::<Vec<_>>()
+            .into_iter()
+    }
+
     /// The handle of the focused window for the parent of portal dialogs,
     /// such as `wayland:HANDLE` or `x11:XID`.
     pub fn focused_window_handle(&self) -> Option<String> {
