@@ -7,6 +7,7 @@
 
 mod data;
 mod shm;
+mod text_input;
 mod window;
 
 pub(crate) use data::Contents;
@@ -43,9 +44,11 @@ pub(crate) enum Role {
     FractionalScale(Weak<WaylandWindow>),
     Frame(Weak<WaylandWindow>),
     ActivationToken(Weak<WaylandWindow>),
+    Exported(Weak<WaylandWindow>),
     DataDevice,
     DataOffer,
     DataSource,
+    TextInput,
 }
 
 /// The globals that the client binds.
@@ -66,6 +69,7 @@ pub(crate) struct Globals {
     pub(crate) wm_dialog: Option<Proxy>,
     pub(crate) system_bell: Option<Proxy>,
     pub(crate) output_manager: Option<Proxy>,
+    pub(crate) exporter: Option<Proxy>,
 }
 
 struct Output {
@@ -144,6 +148,8 @@ pub(crate) struct Client {
     lost: Cell<bool>,
     /// The clipboard and drag-and-drop state.
     data: RefCell<data::DataState>,
+    /// The text input of the seat, for input methods.
+    text_input: RefCell<Option<text_input::TextInput>>,
 }
 
 // Event opcodes.
@@ -189,6 +195,8 @@ const TOKEN_SET_SURFACE: u16 = 2;
 const TOKEN_COMMIT: u16 = 3;
 const TOKEN_DONE: u16 = 0;
 const OUTPUT_MANAGER_GET_XDG_OUTPUT: u16 = 1;
+const EXPORTER_EXPORT_TOPLEVEL: u16 = 1;
+const EXPORTED_HANDLE: u16 = 0;
 
 /// `WL_KEYBOARD_KEYMAP_FORMAT_XKB_V1`.
 const KEYMAP_FORMAT_XKB_V1: u32 = 1;
@@ -213,6 +221,7 @@ fn wanted(interface: &str) -> Option<(&'static Interface, u32)> {
         "xdg_wm_dialog_v1" => (&wl::XDG_WM_DIALOG_V1, 1),
         "xdg_system_bell_v1" => (&wl::XDG_SYSTEM_BELL_V1, 1),
         "zxdg_output_manager_v1" => (&wl::ZXDG_OUTPUT_MANAGER_V1, 3),
+        "zxdg_exporter_v2" => (&wl::ZXDG_EXPORTER_V2, 1),
         _ => return None,
     })
 }
@@ -283,6 +292,7 @@ impl Client {
             pending_tokens: RefCell::new(Vec::new()),
             lost: Cell::new(false),
             data: RefCell::new(data::DataState::default()),
+            text_input: RefCell::new(None),
         });
         client
             .routes
@@ -409,11 +419,15 @@ impl Client {
             "zwp_pointer_gestures_v1" => globals.pointer_gestures = Some(proxy),
             "xdg_wm_dialog_v1" => globals.wm_dialog = Some(proxy),
             "xdg_system_bell_v1" => globals.system_bell = Some(proxy),
+            "zxdg_exporter_v2" => globals.exporter = Some(proxy),
             _ => {}
         }
         drop((state, globals, routes));
         if matches!(interface, "wl_seat" | "wl_data_device_manager") {
             self.ensure_data_device();
+        }
+        if matches!(interface, "wl_seat" | "zwp_text_input_manager_v3") {
+            self.ensure_text_input();
         }
     }
 
@@ -516,6 +530,29 @@ impl Client {
         self.pending_tokens.borrow_mut().push(token);
     }
 
+    /// Exports the toplevel of `window`, so a portal dialog can name it as
+    /// its parent. The handle arrives later.
+    pub(crate) fn export_window(&self, window: &WaylandWindow) {
+        let globals = self.globals.borrow();
+        let Some(exporter) = &globals.exporter else {
+            return;
+        };
+        let Ok(Some(exported)) = exporter.request(
+            EXPORTER_EXPORT_TOPLEVEL,
+            &[Arg::NewId, Arg::Object(Some(&window.surface))],
+        ) else {
+            return;
+        };
+        let weak = self
+            .window_of(window.surface.id())
+            .as_ref()
+            .map_or_else(Weak::new, Rc::downgrade);
+        self.routes
+            .borrow_mut()
+            .insert(exported.id(), Role::Exported(weak));
+        *window.exported.borrow_mut() = Some(exported);
+    }
+
     /// Shows the cursor of the window under the pointer.
     pub(crate) fn set_cursor(&self, surface: ObjectId, shape: &CursorShape) -> Result<(), Error> {
         let over = self
@@ -582,8 +619,6 @@ impl Client {
             );
         }
     }
-
-    pub(crate) fn text_input_changed(&self, _surface: ObjectId) {}
 
     /// The deadline of the next key repeat.
     pub(crate) fn next_deadline(&self) -> Option<Instant> {
@@ -745,6 +780,7 @@ impl Client {
             Role::DataDevice => self.data_device_event(&mut event),
             Role::DataOffer => self.data_offer_event(&event),
             Role::DataSource => self.data_source_event(&mut event),
+            Role::TextInput => self.text_input_event(&event),
             Role::XdgOutput(output) => {
                 let mut outputs = self.outputs.borrow_mut();
                 let Some(output) = outputs
@@ -820,6 +856,12 @@ impl Client {
                 self.routes.borrow_mut().remove(&event.object);
                 if let Some(window) = window.upgrade() {
                     window.frame_done(event.object);
+                }
+            }
+            Role::Exported(window) if event.opcode == EXPORTED_HANDLE => {
+                if let Some(window) = window.upgrade() {
+                    *window.shared.parent_handle.borrow_mut() =
+                        Some(format!("wayland:{}", event.arg(0).str()));
                 }
             }
             Role::ActivationToken(window) if event.opcode == TOKEN_DONE => {

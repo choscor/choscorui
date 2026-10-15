@@ -25,9 +25,7 @@ use std::ffi::{CStr, CString};
 use std::fmt;
 use std::os::fd::{AsRawFd, BorrowedFd, FromRawFd, OwnedFd};
 use std::rc::Rc;
-use sys::{
-    Interface, WaylandClient, WlArgument, WlArray, WlDisplay, WlInterface, WlMessage, WlProxy,
-};
+use sys::{Interface, WaylandClient, WlArgument, WlDisplay, WlInterface, WlMessage, WlProxy};
 
 pub(crate) use protocols::*;
 
@@ -79,8 +77,6 @@ impl std::error::Error for WaylandError {}
 pub(crate) enum Arg<'a> {
     Int(i32),
     Uint(u32),
-    /// A `wl_fixed_t` value.
-    Fixed(f64),
     /// A string; `None` only where the signature allows null.
     Str(Option<&'a str>),
     /// An object; `None` only where the signature allows null.
@@ -89,7 +85,6 @@ pub(crate) enum Arg<'a> {
     NewId,
     /// The new object of `wl_registry.bind`: its interface and version.
     Bind(&'static Interface, u32),
-    Array(&'a [u8]),
     Fd(BorrowedFd<'a>),
 }
 
@@ -134,6 +129,14 @@ impl Value {
     pub(crate) fn object(&self) -> Option<ObjectId> {
         match self {
             Self::Object(id) => *id,
+            _ => None,
+        }
+    }
+
+    /// A string that may be null.
+    pub(crate) fn str_opt(&self) -> Option<&str> {
+        match self {
+            Self::Str(text) => text.as_deref(),
             _ => None,
         }
     }
@@ -448,11 +451,9 @@ pub(crate) unsafe fn table<'a, T>(pointer: *const T, length: usize) -> &'a [T] {
     unsafe { std::slice::from_raw_parts(pointer, length) }
 }
 
-/// Owned C data that the marshalled arguments point into. `arrays` has
-/// room for every argument, so it never moves its elements.
+/// Owned C strings that the marshalled arguments point into.
 struct Keep {
     strings: Vec<CString>,
-    arrays: Vec<WlArray>,
 }
 
 impl Proxy {
@@ -545,7 +546,6 @@ impl Proxy {
         }
         let mut keep = Keep {
             strings: Vec::new(),
-            arrays: Vec::with_capacity(kinds.len()),
         };
         let mut wire = Vec::with_capacity(kinds.len());
         // SAFETY: the types table has one entry per argument.
@@ -555,9 +555,6 @@ impl Proxy {
             let value = match (kind, arg) {
                 (b'i', Arg::Int(value)) => WlArgument { i: *value },
                 (b'u', Arg::Uint(value)) => WlArgument { u: *value },
-                (b'f', Arg::Fixed(value)) => WlArgument {
-                    f: (value * 256.0).round() as i32,
-                },
                 (b's', Arg::Str(text)) => match text {
                     Some(text) => {
                         let text = CString::new(*text)
@@ -592,17 +589,6 @@ impl Proxy {
                     WlArgument { n: 0 }
                 }
                 (b'n', Arg::Bind(..)) if typed.is_null() => WlArgument { n: 0 },
-                (b'a', Arg::Array(bytes)) => {
-                    keep.arrays.push(WlArray {
-                        size: bytes.len(),
-                        alloc: bytes.len(),
-                        data: bytes.as_ptr().cast_mut().cast::<c_void>(),
-                    });
-                    let Some(array) = keep.arrays.last_mut() else {
-                        return Err(self.bad(opcode, "an array did not keep"));
-                    };
-                    WlArgument { a: &raw mut *array }
-                }
                 (b'h', Arg::Fd(fd)) => WlArgument { h: fd.as_raw_fd() },
                 _ => return Err(self.bad(opcode, "an argument does not match the signature")),
             };
@@ -613,9 +599,8 @@ impl Proxy {
             None => (std::ptr::null(), self.version),
         };
         // SAFETY: the arguments match the signature of the request, the
-        // strings and arrays in `keep` outlive the call, and libwayland
-        // copies them into its buffer. libwayland only reads the array
-        // data.
+        // strings in `keep` outlive the call, and libwayland copies them
+        // into its buffer.
         let raw = unsafe {
             (self.display.lib.wl_proxy_marshal_array_flags)(
                 self.raw,

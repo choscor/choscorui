@@ -327,7 +327,7 @@ fn a_drag_between_two_windows_drops_the_items_and_ends() {
         .begin_drag(
             &[DragItem::Text("dragged".into()), custom.clone()],
             DragOperations::ALL,
-            Some(&Image::from_rgba8(2, 2, vec![0, 0, 255, 255].repeat(4)).unwrap()),
+            Some(&Image::from_rgba8(2, 2, [0, 0, 255, 255].repeat(4)).unwrap()),
         )
         .unwrap();
     for x in [200, 400, 620, 650] {

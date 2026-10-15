@@ -173,6 +173,10 @@ impl Platform {
             eprintln!("choscorui: {error}");
             std::thread::sleep(timeout);
         }
+        // Portal dialogs open over the focused window.
+        if let Some(handle) = self.application.focused_window_handle() {
+            self.services.set_parent_window(handle);
+        }
     }
 
     /// The compositor or window manager decides about focus; new windows
@@ -267,8 +271,11 @@ impl NativeWindow {
                 _ => {}
             }
         }
-        let input = host.text_input().unwrap_or_default();
+        let input = host.text_input();
+        let active = input.is_some();
+        let input = input.unwrap_or_default();
         self.window.set_text_input_state(TextInputState {
+            active,
             text: input.text,
             selected_utf16: input.selected_utf16,
             marked_utf16: input.marked_utf16,

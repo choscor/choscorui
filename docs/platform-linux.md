@@ -137,6 +137,24 @@ On Wayland, `wl_data_device` carries the selection and the drags. The compositor
 - Wayland has copy and move actions, but no link action.
 - The modifiers follow the PC convention: Ctrl copies, Shift moves, and Ctrl+Shift links. Without a modifier, a drag in the same application moves, and a drag from another application copies.
 
+## Input methods
+
+`TextInputState` tells the input method about the focused text control. `active` is true while a text control has the focus. `text` is the committed text of the control, and the UTF-16 ranges count in it.
+
+On Wayland, `zwp_text_input_v3` connects the window to the input method:
+
+1. When `active` becomes true, the backend enables the text input.
+2. Each state change sends the surrounding text, the cursor rectangle, and a commit. The surrounding text goes only while nothing is marked, because it does not contain the marked text.
+3. The protocol uses byte offsets. The backend converts them to and from UTF-16 offsets.
+4. A text longer than 4000 bytes sends a part of 4000 bytes or less around the selection.
+
+The changes of the input method come in a group that ends with `done`. Each group gives these `ImeEvent`s, in this order:
+
+- A commit or a deletion gives `CommitText`. A deletion around the cursor gives a `replacement_utf16` range.
+- New marked text gives `SetMarkedText`. When the input method clears its marked text without a commit, the event has empty text.
+
+`input_methods` is `Supported` when the compositor has `zwp_text_input_manager_v3`.
+
 ## Image codecs
 
 On Linux, `decode_image(bytes)` gives straight-alpha sRGB RGBA8 pixels, as the macOS backend does. The first bytes select the format and its library:
@@ -166,7 +184,7 @@ On Linux, `decode_image(bytes)` gives straight-alpha sRGB RGBA8 pixels, as the m
 - Windows on the screen and painting
 - Text shaping and fonts
 - Clipboard and drag-and-drop data transfer on X11
-- Input method composition
+- Input method composition on X11
 - Accessibility
 - Desktop portals
 - The `choscorui::platform` module and capability values for Linux

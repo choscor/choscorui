@@ -108,6 +108,14 @@ impl Display {
         }
     }
 
+    /// True when the server has an input method protocol.
+    fn has_input_methods(&self) -> bool {
+        match self {
+            Self::Wayland(client) => client.has_text_input(),
+            Self::X11(_) => false,
+        }
+    }
+
     fn set_selection(&self, payload: transfer::Payload) -> Result<(), Error> {
         match self {
             Self::Wayland(client) => client.set_selection(payload),
@@ -268,6 +276,17 @@ impl Application {
         self.timers.panics()
     }
 
+    /// The handle of the focused window for the parent of portal dialogs,
+    /// such as `wayland:HANDLE` or `x11:XID`.
+    pub fn focused_window_handle(&self) -> Option<String> {
+        self.windows
+            .borrow()
+            .iter()
+            .filter_map(std::rc::Weak::upgrade)
+            .find(|window| window.focused.get() && !window.closed.get())
+            .and_then(|window| window.parent_handle.borrow().clone())
+    }
+
     /// Makes the event loop serve `connection` too: it waits on the
     /// descriptors of the connection and dispatches its messages.
     pub fn attach_bus(&self, connection: crate::dbus::Connection) {
@@ -413,6 +432,9 @@ fn probe() -> BackendCapabilities {
     capabilities.text_shaping = crate::text_shaping_support();
     capabilities.image_codecs = crate::image_codecs_support();
     capabilities.keyboard = KeyConvention::Pc;
+    if display.has_input_methods() {
+        capabilities.input_methods = Support::Supported;
+    }
     if display.has_data_transfer() {
         capabilities.clipboard = Support::Supported;
         capabilities.drag_and_drop = Support::Supported;

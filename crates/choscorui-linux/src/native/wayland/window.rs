@@ -92,6 +92,9 @@ pub(crate) struct WaylandWindow {
     pub(crate) toplevel: RefCell<Option<Proxy>>,
     decoration: RefCell<Option<Proxy>>,
     fractional: RefCell<Option<Proxy>>,
+    /// The `zxdg_exported_v2` of the toplevel, for the parent of portal
+    /// dialogs.
+    pub(crate) exported: RefCell<Option<Proxy>>,
     viewport: RefCell<Option<Proxy>>,
     pub(crate) inner: RefCell<Inner>,
     /// Set by `request_paint`; the loop paints at the next frame.
@@ -195,6 +198,7 @@ impl WaylandWindow {
             toplevel: RefCell::new(Some(toplevel)),
             decoration: RefCell::new(decoration),
             fractional: RefCell::new(fractional),
+            exported: RefCell::new(None),
             viewport: RefCell::new(viewport),
             inner: RefCell::new(Inner {
                 protocol,
@@ -589,6 +593,7 @@ impl Surface for WaylandWindow {
             let _ = self.surface.request(SURFACE_COMMIT, &[]);
             if let Some(client) = self.client.upgrade() {
                 client.activate_window(self);
+                client.export_window(self);
             }
         }
     }

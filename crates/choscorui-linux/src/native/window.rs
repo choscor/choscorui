@@ -91,6 +91,9 @@ pub(crate) struct WindowShared {
     pub(crate) events: RefCell<VecDeque<WindowEvent>>,
     pub(crate) paint: RefCell<PaintState>,
     pub(crate) drop_target: RefCell<DropTarget>,
+    /// The handle of the window for the parent of portal dialogs, such as
+    /// `wayland:HANDLE` or `x11:XID`.
+    pub(crate) parent_handle: RefCell<Option<String>>,
 }
 
 impl WindowShared {
@@ -117,6 +120,7 @@ impl WindowShared {
                 last_paint: None,
             }),
             drop_target: RefCell::new(DropTarget::default()),
+            parent_handle: RefCell::new(None),
         })
     }
 

@@ -97,7 +97,7 @@ export SWAYSOCK
 
 # Build and start the virtual input helper.
 helper_src=$(cd "$(dirname "$0")/virtual-input" && pwd)
-for protocol in virtual-keyboard-unstable-v1 wlr-virtual-pointer-unstable-v1; do
+for protocol in virtual-keyboard-unstable-v1 wlr-virtual-pointer-unstable-v1 input-method-unstable-v2; do
     wayland-scanner client-header "$helper_src/$protocol.xml" "$runtime/$protocol-client-protocol.h"
     wayland-scanner private-code "$helper_src/$protocol.xml" "$runtime/$protocol-protocol.c"
 done

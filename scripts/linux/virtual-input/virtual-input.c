@@ -12,6 +12,16 @@
  *   button CODE 0|1   releases or presses a button
  *   key CODE 0|1      releases or presses a key
  *   wheel DY          scrolls DY wheel steps (positive is down)
+ *
+ * The helper is also the input method of the seat. These commands send a
+ * group of changes to the focused text input:
+ *
+ *   preedit TEXT      shows TEXT as marked text, with the cursor at its end
+ *   commit TEXT       commits TEXT
+ *   delete B A        deletes B bytes before and A bytes after the cursor
+ *
+ * The helper appends what the text input reports to FIFO.log, one line
+ * each: "activate", "deactivate", and "surrounding TEXT|CURSOR|ANCHOR".
  */
 #define _GNU_SOURCE
 #include <errno.h>
@@ -26,12 +36,21 @@
 #include <wayland-client.h>
 #include <xkbcommon/xkbcommon.h>
 
+#include "input-method-unstable-v2-client-protocol.h"
 #include "virtual-keyboard-unstable-v1-client-protocol.h"
 #include "wlr-virtual-pointer-unstable-v1-client-protocol.h"
 
 static struct wl_seat *seat;
 static struct zwp_virtual_keyboard_manager_v1 *keyboard_manager;
 static struct zwlr_virtual_pointer_manager_v1 *pointer_manager;
+static struct zwp_input_method_manager_v2 *input_method_manager;
+static struct zwp_input_method_v2 *input_method;
+/* The number of done events, which each commit names. */
+static uint32_t done_count;
+static FILE *log_file;
+/* The state of the current group, logged at done. */
+static char surrounding[8192];
+static int surrounding_changed;
 
 static void global(void *data, struct wl_registry *registry, uint32_t name,
                    const char *interface, uint32_t version) {
@@ -45,6 +64,9 @@ static void global(void *data, struct wl_registry *registry, uint32_t name,
     } else if (strcmp(interface, zwlr_virtual_pointer_manager_v1_interface.name) == 0) {
         pointer_manager = wl_registry_bind(registry, name,
                                            &zwlr_virtual_pointer_manager_v1_interface, 1);
+    } else if (strcmp(interface, zwp_input_method_manager_v2_interface.name) == 0) {
+        input_method_manager = wl_registry_bind(registry, name,
+                                                &zwp_input_method_manager_v2_interface, 1);
     }
 }
 
@@ -55,6 +77,68 @@ static void global_remove(void *data, struct wl_registry *registry, uint32_t nam
 }
 
 static const struct wl_registry_listener registry_listener = {global, global_remove};
+
+static void log_line(const char *line) {
+    if (log_file) {
+        fprintf(log_file, "%s\n", line);
+        fflush(log_file);
+    }
+}
+
+static void im_activate(void *data, struct zwp_input_method_v2 *im) {
+    (void)data;
+    (void)im;
+    log_line("activate");
+}
+
+static void im_deactivate(void *data, struct zwp_input_method_v2 *im) {
+    (void)data;
+    (void)im;
+    log_line("deactivate");
+}
+
+static void im_surrounding_text(void *data, struct zwp_input_method_v2 *im, const char *text,
+                                uint32_t cursor, uint32_t anchor) {
+    (void)data;
+    (void)im;
+    snprintf(surrounding, sizeof surrounding, "surrounding %s|%u|%u", text, cursor, anchor);
+    surrounding_changed = 1;
+}
+
+static void im_text_change_cause(void *data, struct zwp_input_method_v2 *im, uint32_t cause) {
+    (void)data;
+    (void)im;
+    (void)cause;
+}
+
+static void im_content_type(void *data, struct zwp_input_method_v2 *im, uint32_t hint,
+                            uint32_t purpose) {
+    (void)data;
+    (void)im;
+    (void)hint;
+    (void)purpose;
+}
+
+static void im_done(void *data, struct zwp_input_method_v2 *im) {
+    (void)data;
+    (void)im;
+    done_count++;
+    if (surrounding_changed) {
+        log_line(surrounding);
+        surrounding_changed = 0;
+    }
+}
+
+static void im_unavailable(void *data, struct zwp_input_method_v2 *im) {
+    (void)data;
+    (void)im;
+    log_line("unavailable");
+}
+
+static const struct zwp_input_method_v2_listener input_method_listener = {
+    im_activate, im_deactivate, im_surrounding_text, im_text_change_cause,
+    im_content_type, im_done, im_unavailable,
+};
 
 static uint32_t now_ms(void) {
     struct timespec ts;
@@ -104,6 +188,17 @@ static void run(const char *line, struct zwp_virtual_keyboard_v1 *keyboard,
         zwlr_virtual_pointer_v1_frame(pointer);
     } else if (sscanf(line, "key %u %u", &a, &b) == 2) {
         zwp_virtual_keyboard_v1_key(keyboard, now_ms(), a, b);
+    } else if (strncmp(line, "preedit ", 8) == 0 && input_method) {
+        const char *text = line + 8;
+        int length = (int)strlen(text);
+        zwp_input_method_v2_set_preedit_string(input_method, text, length, length);
+        zwp_input_method_v2_commit(input_method, done_count);
+    } else if (strncmp(line, "commit ", 7) == 0 && input_method) {
+        zwp_input_method_v2_commit_string(input_method, line + 7);
+        zwp_input_method_v2_commit(input_method, done_count);
+    } else if (sscanf(line, "delete %u %u", &a, &b) == 2 && input_method) {
+        zwp_input_method_v2_delete_surrounding_text(input_method, a, b);
+        zwp_input_method_v2_commit(input_method, done_count);
     } else if (sscanf(line, "wheel %lf", &value) == 1) {
         zwlr_virtual_pointer_v1_axis_source(pointer, 0);
         zwlr_virtual_pointer_v1_axis_discrete(pointer, now_ms(), 0,
@@ -141,6 +236,13 @@ int main(int argc, char **argv) {
         zwp_virtual_keyboard_manager_v1_create_virtual_keyboard(keyboard_manager, seat);
     struct zwlr_virtual_pointer_v1 *pointer =
         zwlr_virtual_pointer_manager_v1_create_virtual_pointer(pointer_manager, seat);
+    if (input_method_manager) {
+        char log_path[4096];
+        snprintf(log_path, sizeof log_path, "%s.log", argv[1]);
+        log_file = fopen(log_path, "a");
+        input_method = zwp_input_method_manager_v2_get_input_method(input_method_manager, seat);
+        zwp_input_method_v2_add_listener(input_method, &input_method_listener, NULL);
+    }
     if (send_keymap(keyboard) != 0) {
         fprintf(stderr, "virtual-input: no keymap\n");
         return 1;

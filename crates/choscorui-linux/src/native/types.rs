@@ -102,6 +102,8 @@ pub enum ImeEvent {
 /// reads.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct TextInputState {
+    /// A text control has the focus, so the input method is on.
+    pub active: bool,
     /// The committed text of the focused control. The ranges count UTF-16
     /// code units of it.
     pub text: String,
