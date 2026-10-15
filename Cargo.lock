@@ -56,6 +56,7 @@ name = "choscorui-gallery"
 version = "0.1.0"
 dependencies = [
  "choscorui",
+ "choscorui-linux",
 ]
 
 [[package]]

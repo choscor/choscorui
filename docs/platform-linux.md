@@ -769,6 +769,7 @@ The session has these parts:
 | [`menu_smoke.rs`](../crates/choscorui-linux/tests/menu_smoke.rs) | The menu queue, and popups that open, flip, and close at a click outside |
 | [`chrome_smoke.rs`](../crates/choscorui/tests/chrome_smoke.rs) | The drawn menu bar and title bar on Wayland, and context menus on both display servers |
 | [`atspi_smoke.rs`](../crates/choscorui-linux/tests/atspi_smoke.rs) | Roles, names, actions, events, and announcements on the accessibility bus |
+| [`gallery/tests/atspi_smoke.rs`](../gallery/tests/atspi_smoke.rs) | The roles and names of the gallery pages, and the effect of the actions that a client invokes |
 | [`app_smoke.rs`](../crates/choscorui/tests/app_smoke.rs) and [`errors_and_capabilities.rs`](../crates/choscorui/tests/errors_and_capabilities.rs) | The facade on Linux and the capability values |
 | [`gles_parity_smoke.rs`](../crates/choscorui/tests/gles_parity_smoke.rs) | GLES renders against the software renderer, and text against Cairo |
 
