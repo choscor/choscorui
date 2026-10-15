@@ -780,7 +780,7 @@ The session has these parts:
 | [`gles_parity_smoke.rs`](../crates/choscorui/tests/gles_parity_smoke.rs) | GLES renders against the software renderer, and text against Cairo |
 | [`display_lost_smoke.rs`](../crates/choscorui/tests/display_lost_smoke.rs) | On a private sway or Xvfb that the test stops, `App::run` returns `AppError::Disconnected` |
 
-The `native` job also opens the gallery, runs the gallery autopilot on each display server, and runs the bench. Without a display server, it checks that the application reports `Unsupported`.
+The `native` job also opens the gallery, runs the gallery autopilot on each display server with each painter, and runs the bench. Without a display server, it checks that the application reports `Unsupported`.
 
 [`services.rs`](../crates/choscorui-linux/tests/services.rs) runs the desktop services against test fakes of the portal, the notification server, and the status watcher. [`codecs.rs`](../crates/choscorui-linux/tests/codecs.rs) and [`text_shaping.rs`](../crates/choscorui-linux/tests/text_shaping.rs) need no display server.
 

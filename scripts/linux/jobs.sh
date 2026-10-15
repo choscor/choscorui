@@ -65,6 +65,10 @@ native() {
         CHOSCORUI_BACKEND=$backend $session env \
             CHOSCORUI_GALLERY_SETTINGS="$(mktemp -d)/gallery.txt" CHOSCORUI_GALLERY_AUTOPILOT=1 \
             cargo run -p choscorui-gallery --locked
+        echo "== autopilot: CHOSCORUI_BACKEND=$backend CHOSCORUI_PAINTER=cairo"
+        CHOSCORUI_BACKEND=$backend CHOSCORUI_PAINTER=cairo $session env \
+            CHOSCORUI_GALLERY_SETTINGS="$(mktemp -d)/gallery.txt" CHOSCORUI_GALLERY_AUTOPILOT=1 \
+            cargo run -p choscorui-gallery --locked
     done
     # The bench checks the budgets that do not depend on the machine:
     # leaks, missed frames, idle work, and the release binary sizes.
