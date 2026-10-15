@@ -1,6 +1,6 @@
 # License audit
 
-Last checked on 2026-10-15 against the workspace `Cargo.lock`, the link line of the gallery release build (`otool -L`), and the published crate files. Do the audit again before each release and for each change to the dependency rule (see [releasing.md](releasing.md) and [architecture.md](architecture.md)).
+Last checked on 2026-10-15 against the workspace `Cargo.lock`, the link lines of the gallery release build (`otool -L` and `ldd`), and the published crate files. The licenses of the Linux system libraries come from their Ubuntu 22.04 packages. Do the audit again before each release and for each change to the dependency rule (see [releasing.md](releasing.md) and [architecture.md](architecture.md)).
 
 ## Project license
 
@@ -36,14 +36,30 @@ macOS supplies these libraries, and they load dynamically. The Xcode and macOS S
 
 ## Loaded system libraries (Linux)
 
-The Linux release binaries link only `libc`, `libm`, and `libgcc_s` (`ldd target/release/choscorui-gallery`). The backend loads the other libraries at run time with `dlopen`:
+The Linux release binaries link only `libc`, `libm`, and `libgcc_s` (`ldd target/release/choscorui-gallery`). The backend loads the other libraries at run time with `dlopen`. The table gives the license of each library from the `/usr/share/doc/<package>/copyright` file of its Ubuntu 22.04 package. Other distributions can use other versions of these libraries.
 
-- **Display:** libwayland-client, libwayland-cursor, libwayland-egl, libxkbcommon, libxkbcommon-x11, libxcb and its extensions, and libX11.
-- **Painting and text:** libEGL, libGLESv2, libcairo, libfreetype, libharfbuzz, and libfontconfig.
-- **Desktop and sound:** libdbus-1 and libcanberra.
-- **Images:** libpng16, libturbojpeg, libgif, libtiff, libwebp, and libheif.
+| Library | Ubuntu 22.04 package | License |
+| --- | --- | --- |
+| libwayland-client, libwayland-cursor, libwayland-egl | `libwayland-client0`, `libwayland-cursor0`, `libwayland-egl1` | MIT (X11) |
+| libxkbcommon, libxkbcommon-x11 | `libxkbcommon0`, `libxkbcommon-x11-0` | MIT (X11) |
+| libxcb and its extensions | `libxcb1`, `libxcb-xkb1`, `libxcb-xinput0`, `libxcb-shm0`, `libxcb-randr0`, `libxcb-render0`, `libxcb-xtest0` | MIT (X11) |
+| libxcb-cursor | `libxcb-cursor0` | MIT (X11) |
+| libX11 | `libx11-6`, `libx11-xcb1` | MIT (X11) |
+| libEGL, libGLESv2 | `libegl1`, `libgles2` (libglvnd), with the Mesa driver `libegl-mesa0` | MIT |
+| libcairo | `libcairo2` | LGPL-2.1 OR MPL-1.1 |
+| libfreetype | `libfreetype6` | FTL (FreeType License) |
+| libharfbuzz | `libharfbuzz0b` | MIT |
+| libfontconfig | `libfontconfig1` | MIT-style permission notice (Keith Packard) |
+| libdbus-1 | `libdbus-1-3` | AFL-2.1 OR GPL-2.0-or-later |
+| libcanberra | `libcanberra0` | LGPL-2.1-or-later |
+| libpng16 | `libpng16-16` | libpng license |
+| libturbojpeg | `libturbojpeg` | IJG (JPEG) license |
+| libgif | `libgif7` | MIT |
+| libtiff | `libtiff5` | libtiff license (Hylafax) |
+| libwebp | `libwebp7` | BSD-3-Clause |
+| libheif | `libheif1` | LGPL-3.0-or-later |
 
-The Linux distribution supplies these libraries under their own licenses. ChoscorUI does not distribute them, and no binary contains their code.
+The Linux distribution supplies these libraries under their own licenses. ChoscorUI does not distribute them, and no binary contains their code. The backend loads the LGPL libraries (libcairo, libcanberra, and libheif) and libdbus-1 only dynamically, so the user can replace them.
 
 ## Fonts and bundled assets
 
