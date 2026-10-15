@@ -32,3 +32,5 @@ pub use ffi::LoadError;
 
 #[cfg(target_os = "linux")]
 pub mod dbus;
+#[cfg(target_os = "linux")]
+pub mod services;
