@@ -67,7 +67,10 @@ WLR_BACKENDS=headless WLR_RENDERER=pixman WLR_LIBINPUT_NO_DEVICES=1 \
     "${as_compositor[@]}" sway --unsupported-gpu -c "$runtime/sway.conf" >"$runtime/sway.log" 2>&1 &
 pids+=($!)
 
-Xvfb :99 -screen 0 1280x800x24 +extension RANDR -nolisten tcp >"$runtime/xvfb.log" 2>&1 &
+# -noreset keeps the server up when its last client disconnects. Without
+# it, a test that probes the display and then connects again meets the
+# server while it resets, and the connection fails.
+Xvfb :99 -screen 0 1280x800x24 +extension RANDR -nolisten tcp -noreset >"$runtime/xvfb.log" 2>&1 &
 pids+=($!)
 
 # Wait up to ten seconds for both servers.

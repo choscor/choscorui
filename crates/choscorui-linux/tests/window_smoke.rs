@@ -302,6 +302,7 @@ fn x11_scale_follows_the_physical_size_then_xft_dpi() {
             "192",
             "-extension",
             "RANDR",
+            "-noreset",
             "-nolisten",
             "tcp",
         ])

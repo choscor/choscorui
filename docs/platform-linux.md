@@ -762,7 +762,7 @@ The smoke tests open native windows, so each test runs alone. [`scripts/linux/jo
 The session has these parts:
 
 - a private D-Bus session bus and the AT-SPI registry
-- headless sway with one 1280x800 output, and Xvfb on `:99` with RandR
+- headless sway with one 1280x800 output, and Xvfb on `:99` with RandR. Xvfb does not reset when its last client disconnects
 - a virtual keyboard and pointer for sway, which a test drives through the FIFO in `CHOSCORUI_VIRTUAL_INPUT`
 - XTEST on Xvfb, which a test drives through `Window::simulate_pointer`
 
