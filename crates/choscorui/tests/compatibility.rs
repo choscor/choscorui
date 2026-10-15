@@ -68,11 +68,11 @@ fn golden(name: &str, actual: &str) {
             path.display()
         )
     });
-    if expected != actual {
+    if !same_record(&expected, actual) {
         let line = expected
             .lines()
             .zip(actual.lines())
-            .position(|(a, b)| a != b)
+            .position(|(a, b)| !same_record(a, b))
             .unwrap_or_else(|| expected.lines().count().min(actual.lines().count()));
         panic!(
             "{name} changed at line {}:\n  golden: {:?}\n  actual: {:?}\nIf intended, re-record with CHOSCORUI_BLESS=1 and note it in the release notes.",
@@ -81,6 +81,78 @@ fn golden(name: &str, actual: &str) {
             actual.lines().nth(line),
         );
     }
+}
+
+/// True when two records differ at most in the rounding of their numbers.
+/// The system math libraries of macOS and Linux can round `sin`, `tan`,
+/// and `acos` one unit differently, so a number may differ by a relative
+/// 1e-9. Any other change of text or number is a difference.
+fn same_record(expected: &str, actual: &str) -> bool {
+    if expected == actual {
+        return true;
+    }
+    let (expected, actual) = (tokens(expected), tokens(actual));
+    expected.len() == actual.len()
+        && expected.iter().zip(&actual).all(|(a, b)| match (a, b) {
+            (Token::Number(a), Token::Number(b)) => {
+                (a - b).abs() <= 1e-9 * a.abs().max(b.abs()).max(1.0)
+            }
+            _ => a == b,
+        })
+}
+
+#[derive(Debug, PartialEq)]
+enum Token<'a> {
+    Number(f64),
+    Text(&'a str),
+}
+
+/// Splits a record into decimal numbers and the text between them.
+fn tokens(record: &str) -> Vec<Token<'_>> {
+    let mut tokens = Vec::new();
+    let mut rest = record;
+    while !rest.is_empty() {
+        let starts_number = |text: &str| {
+            let mut chars = text.chars();
+            match chars.next() {
+                Some('-') => chars.next().is_some_and(|c| c.is_ascii_digit()),
+                Some(c) => c.is_ascii_digit(),
+                None => false,
+            }
+        };
+        let split = rest
+            .char_indices()
+            .find(|(index, _)| starts_number(&rest[*index..]))
+            .map_or(rest.len(), |(index, _)| index);
+        if split > 0 {
+            tokens.push(Token::Text(&rest[..split]));
+            rest = &rest[split..];
+            continue;
+        }
+        let end = rest
+            .char_indices()
+            .skip(1)
+            .find(|(_, c)| !(c.is_ascii_digit() || matches!(c, '.' | 'e' | 'E' | '-' | '+')))
+            .map_or(rest.len(), |(index, _)| index);
+        match rest[..end].parse::<f64>() {
+            Ok(number) => tokens.push(Token::Number(number)),
+            Err(_) => tokens.push(Token::Text(&rest[..end])),
+        }
+        rest = &rest[end..];
+    }
+    tokens
+}
+
+#[test]
+fn records_compare_numbers_to_rounding() {
+    assert!(same_record(
+        "x: 30.320704016675414 }",
+        "x: 30.32070401667541 }"
+    ));
+    assert!(!same_record("x: 30.3207 }", "x: 30.3208 }"));
+    assert!(!same_record("x: 1, y: 2", "x: 1, z: 2"));
+    assert!(!same_record("[1, 2]", "[1, 2, 3]"));
+    assert!(!same_record("id 7", "id 8"));
 }
 
 fn names(nodes: &[(NodeId, &str)], id: Option<NodeId>) -> String {
