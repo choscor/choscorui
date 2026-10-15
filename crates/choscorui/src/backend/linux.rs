@@ -12,6 +12,7 @@ use choscorui_core::{
 use choscorui_linux::{
     Application, Error, ImeEvent, LinuxTextShaper, Modifiers, TextInputState, Window, WindowEvent,
 };
+use std::cell::RefCell;
 use std::rc::Rc;
 use std::time::Duration;
 
@@ -111,7 +112,10 @@ impl Platform {
     }
 
     pub(crate) fn install_menu(&self, model: MenuBarModel) -> Result<NativeMenu, MenuError> {
-        Ok(NativeMenu { model })
+        Ok(NativeMenu {
+            model,
+            activations: RefCell::new(Vec::new()),
+        })
     }
 
     /// Waits up to `timeout` for a native event and handles it. A lost
@@ -268,18 +272,26 @@ impl NativeWindow {
     }
 }
 
-/// The command menus. The in-window menu bar draws them later; until
-/// then they take no pointer input.
+/// The command menus. Linux has no global menu bar, so a chosen command
+/// waits in `activations` until the application takes it.
 pub(crate) struct NativeMenu {
     model: MenuBarModel,
+    activations: RefCell<Vec<MenuCommandId>>,
 }
 
 impl NativeMenu {
+    /// The commands that the user chose since the last call.
     pub(crate) fn take_activations(&self) -> Vec<MenuCommandId> {
-        Vec::new()
+        std::mem::take(&mut *self.activations.borrow_mut())
     }
 
+    /// Chooses `command` as a click does: an enabled item queues its
+    /// activation. Returns false for a disabled or unknown item.
     pub(crate) fn perform(&self, command: MenuCommandId) -> bool {
-        self.model.state(command).is_ok_and(|state| state.enabled)
+        let enabled = self.model.state(command).is_ok_and(|state| state.enabled);
+        if enabled {
+            self.activations.borrow_mut().push(command);
+        }
+        enabled
     }
 }
