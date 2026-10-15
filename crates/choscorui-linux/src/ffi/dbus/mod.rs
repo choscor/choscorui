@@ -1212,9 +1212,14 @@ impl Connection {
 
     /// One turn of a loop that waits only on this connection: it waits
     /// up to `timeout` (forever for `None`) for the connection, then
-    /// handles what came and dispatches.
+    /// handles what came and dispatches. Messages that wait in the queue,
+    /// for example from a blocking `call`, end the wait at once, so a
+    /// caller sees their effects after the turn instead of waiting on a
+    /// quiet socket.
     pub fn turn(&self, timeout: Option<Duration>) -> Result<(), Error> {
-        self.dispatch()?;
+        if !self.is_connected() {
+            return Err(Error::Disconnected);
+        }
         let watches = self.watches();
         let wait = match (self.next_timeout(), timeout) {
             (Some(own), Some(limit)) => Some(own.min(limit)),

@@ -16,6 +16,7 @@ use std::rc::Rc;
 use std::time::Duration;
 use support::bus::TestBus;
 use support::fake::{Emit, FakeService, Object};
+use support::pump_until;
 
 const NAME: &str = "org.choscorui.Test";
 const PATH: &str = "/org/choscorui/Test";
@@ -170,6 +171,31 @@ fn a_subscription_receives_its_signals() {
 }
 
 #[test]
+fn a_signal_queued_by_a_blocking_call_ends_the_next_turn() {
+    let bus = TestBus::start();
+    let _service = echo_service(&bus);
+    let connection = bus.connect();
+    let pinged = connection
+        .subscribe(MatchRule::signal().interface(INTERFACE).member("Pinged"))
+        .unwrap();
+    connection
+        .call(call("Ping", &[]), Duration::from_secs(5))
+        .unwrap();
+    // `Pinged` comes before the reply of `Echo`, so libdbus queues it
+    // while the call blocks.
+    connection
+        .call(call("Echo", &[]), Duration::from_secs(5))
+        .unwrap();
+    let start = std::time::Instant::now();
+    connection.turn(Some(Duration::from_secs(10))).unwrap();
+    assert!(
+        start.elapsed() < Duration::from_secs(5),
+        "the turn waited on a quiet socket"
+    );
+    assert!(pinged.next().is_some());
+}
+
+#[test]
 fn a_wait_for_a_signal_times_out() {
     let bus = TestBus::start();
     let connection = bus.connect();
@@ -208,7 +234,7 @@ fn an_exported_object_answers_calls() {
         },
     );
     let export = server.export_fallback(PATH, handler).unwrap();
-    // The server turns its loop while the client waits for the reply.
+    // Both loops turn while the client waits for the reply.
     let pending = client
         .call_async(
             Message::method_call(Some(NAME), &format!("{PATH}/child"), Some(INTERFACE), "Add")
@@ -218,14 +244,7 @@ fn an_exported_object_answers_calls() {
             Duration::from_secs(5),
         )
         .unwrap();
-    let reply = client
-        .run_until(Some(Duration::from_secs(5)), |client| {
-            server.turn(Some(Duration::from_millis(5))).unwrap();
-            client.turn(Some(Duration::from_millis(5))).unwrap();
-            client.take_reply(pending)
-        })
-        .unwrap()
-        .unwrap();
+    let reply = pump_until(&[&server, &client], || client.take_reply(pending)).unwrap();
     assert_eq!(reply.args().unwrap(), vec![Value::from(5u32)]);
     drop(export);
     let pending = client
@@ -234,14 +253,7 @@ fn an_exported_object_answers_calls() {
             Duration::from_secs(5),
         )
         .unwrap();
-    let error = client
-        .run_until(Some(Duration::from_secs(5)), |client| {
-            server.turn(Some(Duration::from_millis(5))).unwrap();
-            client.turn(Some(Duration::from_millis(5))).unwrap();
-            client.take_reply(pending)
-        })
-        .unwrap()
-        .unwrap_err();
+    let error = pump_until(&[&server, &client], || client.take_reply(pending)).unwrap_err();
     assert_eq!(
         error.name(),
         Some("org.freedesktop.DBus.Error.UnknownMethod")
