@@ -17,7 +17,7 @@ The release gallery links only `libc`, `libm`, and `libgcc_s` (`ldd target/relea
 | Library | Soname | Use | When it does not load |
 | --- | --- | --- | --- |
 | libwayland-client | `libwayland-client.so.0` | The Wayland connection | No Wayland windows |
-| libxcb | `libxcb.so.1` | The X11 connection | No X11 windows |
+| libxcb, libX11, libX11-xcb | `libxcb.so.1`, `libX11.so.6`, `libX11-xcb.so.1` | The X11 connection: Xlib opens it and reads the events, and xcb sends the requests | No X11 windows |
 | libxkbcommon | `libxkbcommon.so.0` | Keymaps, key state, and compose sequences | No windows on either display server |
 | libcairo | `libcairo.so.2` | The Cairo painter, captures, and the masks and glyphs of the GLES painter | Windows open, but each paint fails and leaves the region clear |
 | libfreetype, libharfbuzz, libfontconfig | `libfreetype.so.6`, `libharfbuzz.so.0`, `libfontconfig.so.1` | [Text](#text) | `text_shaping` is `Unsupported`, and the controls use estimated text metrics |
@@ -25,7 +25,6 @@ The release gallery links only `libc`, `libm`, and `libgcc_s` (`ldd target/relea
 | libwayland-cursor | `libwayland-cursor.so.0` | Xcursor themes on Wayland | Without `wp_cursor_shape_v1`, only custom cursor images show |
 | libxkbcommon-x11 | `libxkbcommon-x11.so.0` | The X11 keymap from XKB | The X11 keyboard has no keymap |
 | libxcb-xkb, libxcb-xinput, libxcb-shm, libxcb-present, libxcb-randr, libxcb-render, libxcb-cursor | `.so.1` for xcb-xkb, `.so.0` for the others | The [X11 extensions](#x11-extensions) | The client uses the fallback of each extension |
-| libX11 | `libX11.so.6` | XIM input methods, and the EGL display on X11 without `EGL_EXT_platform_xcb` | No input method on X11 |
 | libxcb-xtest | `libxcb-xtest.so.0` | `Window::simulate_pointer` and `Window::simulate_key`, for tests | The call returns `Error::Library` |
 | libdbus-1 | `libdbus-1.so.3` | [Desktop services](#desktop-integration) and [accessibility](#accessibility) | No D-Bus services and no AT-SPI bridge |
 | libcanberra | `libcanberra.so.0` | The [alert sound](#alert-sound) when the display server has no bell | No sound |
@@ -450,7 +449,7 @@ The changes of the input method come in a group that ends with `done`. Each grou
 
 On X11, XIM connects the window to the input method, on-the-spot:
 
-1. The client opens a second Xlib connection. It registers an instantiate callback for the input method of `XMODIFIERS`.
+1. The client registers an instantiate callback for the input method of `XMODIFIERS`, on the Xlib display of its connection.
 2. When the callback runs, the client opens the input method. It uses the input method only when it takes preedit callbacks.
 3. When `active` becomes true, the window gets an input context. The context has the focus while the window has it. Its spot is the bottom-left corner of the caret. When `active` becomes false, the context closes, and marked text gives `Unmark`.
 4. Each key of a window with a focused context goes to the input method first. The keys that the input method does not use come back, and the window gets them as usual.
@@ -459,8 +458,8 @@ On X11, XIM connects the window to the input method, on-the-spot:
 XIM has no surrounding text, so the X11 backend does not send `text`. `input_methods` is `Supported` on X11 when such an input method opens.
 
 - **Server restarts.** When the XIM server stops, Xlib calls the destroy callback of the input method. Marked text then gives `Unmark`, and the input contexts close. The client registers the instantiate callback again. When a server starts, the input method opens again, and each window with an active text input gets a new context. Thus a server that starts after the application also works.
-- **Local input method.** Xlib uses its local input method for `@im=none`, and for an empty `XMODIFIERS` when the locale has a compose file. It has only the `XIMPreeditNothing` and `XIMPreeditNone` styles, without preedit callbacks. Thus the client closes it and the second connection. Keys then type their text through xkbcommon and compose, and `input_methods` is `Unsupported`.
-- **Connections.** The [specification](specs/2026-10-15-linux-backend.md) names libX11-xcb, so that XIM and xcb share one connection. The backend does not load libX11-xcb, because a shared connection does not work. With `XCBOwnsEventQueue`, Xlib reads no events, so the XIM transport spins in `XIfEvent` while it waits for a reply. With the event queue of Xlib, the event loop must read `XEvent` structures, not the wire events of xcb. Thus XIM keeps its own connection, and Xlib owns its event queue.
+- **Local input method.** Xlib uses its local input method for `@im=none`, and for an empty `XMODIFIERS` when the locale has a compose file. It has only the `XIMPreeditNothing` and `XIMPreeditNone` styles, without preedit callbacks. Thus the client closes it. Keys then type their text through xkbcommon and compose, and `input_methods` is `Unsupported`.
+- **Connection.** XIM and xcb share one connection. Xlib owns the event queue, so the XIM transport gets its replies in `XIfEvent`. Hooks of Xlib copy each event in wire format for the client, which then gives the event to `XFilterEvent`. [ffi.md](ffi.md#linux-x11) describes the hooks.
 
 ## Desktop integration
 

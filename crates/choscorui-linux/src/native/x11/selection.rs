@@ -16,6 +16,7 @@ use crate::ffi::x11::{
     XCB_EVENT_MASK_PROPERTY_CHANGE, XCB_PROPERTY_DELETE, XCB_PROPERTY_NEW_VALUE,
     XCB_PROPERTY_NOTIFY, XCB_SELECTION_CLEAR, XCB_SELECTION_NOTIFY, XCB_SELECTION_REQUEST,
 };
+use crate::ffi::xlib_xcb::Event;
 use crate::native::transfer::{self, Payload};
 use crate::native::types::Error;
 use std::rc::Rc;
@@ -233,18 +234,24 @@ impl Client {
     pub(crate) fn wait_for(&self, wanted: &dyn Fn(&Bytes) -> bool) -> Option<Bytes> {
         let deadline = Instant::now() + READ_TIMEOUT;
         loop {
-            self.connection.flush();
-            while let Some(event) = self.connection.poll_event() {
-                if wanted(&event) {
-                    return Some(event);
+            self.flush();
+            while let Some(event) = self.display.next_event() {
+                // The event loop gives the kept events to the filters of
+                // Xlib. The filters of XIM watch other windows than the
+                // selection events, so these events skip them.
+                if let Event::Server(bytes, _) = &event {
+                    if wanted(bytes) {
+                        return Some(bytes.clone());
+                    }
+                    if self.selection_event(bytes) {
+                        continue;
+                    }
                 }
-                if !self.selection_event(&event) {
-                    self.deferred.borrow_mut().push_back(event);
-                }
+                self.deferred.borrow_mut().push_back(event);
             }
-            self.connection.flush();
+            self.flush();
             let left = deadline.saturating_duration_since(Instant::now());
-            if left.is_zero() || self.connection.has_error() {
+            if left.is_zero() || self.display.lost() {
                 return None;
             }
             let watch = Watch {

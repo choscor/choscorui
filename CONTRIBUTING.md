@@ -88,7 +88,7 @@ On a Linux machine, run [scripts/linux/jobs.sh](scripts/linux/jobs.sh) `check` a
 - `build-essential` and `pkg-config`
 - `libwayland-dev`, `libxkbcommon-dev`, and `libxkbcommon-x11-dev`
 - `libxcb1-dev`, `libxcb-xkb-dev`, `libxcb-xinput-dev`, `libxcb-shm0-dev`, `libxcb-present-dev`, `libxcb-randr0-dev`, `libxcb-render0-dev`, `libxcb-cursor-dev`, and `libxcb-xtest0-dev`
-- `libx11-dev`
+- `libx11-dev` and `libx11-xcb-dev`
 - `libegl-dev` and `libgles-dev`
 - `libcairo2-dev`, `libfreetype-dev`, `libharfbuzz-dev`, and `libfontconfig-dev`
 - `libdbus-1-dev`

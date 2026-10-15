@@ -1,12 +1,12 @@
 //! libxcb, its extensions, xcb-cursor, and libxkbcommon-x11, with a safe
 //! `Connection`.
 //!
-//! The requests take Rust slices. The replies and the events come back
-//! as owned `Bytes` in the wire format of the protocol, and the native
-//! code reads them at the offsets of the protocol. libxcb inserts
-//! `full_sequence` at byte 32 of each event; the copy of a generic event
-//! removes it again. The crate passes null for the error of each reply,
-//! so the errors of the requests arrive as events with type 0.
+//! The requests take Rust slices. The replies come back as owned `Bytes`
+//! in the wire format of the protocol, and the native code reads them at
+//! the offsets of the protocol. The connection of the backend is the xcb
+//! connection of an Xlib display, which reads the events and the errors
+//! (see `xlib_xcb`). The crate passes null for the error of each reply,
+//! so the errors of the requests arrive with the events.
 
 use super::ctypes::{CChar, CInt, CUint, c_void};
 use super::libc::free_malloc;
@@ -15,8 +15,10 @@ use super::wayland::table;
 use super::xkb::{
     Context, Keymap, KeymapCompileFlags, State, XkbContextRaw, XkbKeymapRaw, XkbStateRaw,
 };
+use super::xlib_xcb::SharedDisplay;
 use std::ffi::CString;
 use std::os::fd::BorrowedFd;
+use std::rc::Rc;
 
 opaque_types! {
     /// `xcb_connection_t`.
@@ -64,16 +66,6 @@ opaque_types! {
 }
 
 ffi_struct! {
-    /// `xcb_generic_event_t`. The check pins `full_sequence` at byte 32,
-    /// which `take_event` removes from generic events.
-    pub(crate) struct XcbGenericEvent = "xcb_generic_event_t" {
-        pub(crate) response_type: u8,
-        pub(crate) pad0: u8,
-        pub(crate) sequence: u16,
-        pub(crate) pad: [u32; 7],
-        pub(crate) full_sequence: u32,
-    }
-
     /// `xcb_screen_t`.
     pub(crate) struct XcbScreen = "xcb_screen_t" {
         pub(crate) root: u32,
@@ -227,8 +219,6 @@ libraries! {
             fn xcb_get_file_descriptor(c: *mut XcbConnection) -> CInt;
             fn xcb_generate_id(c: *mut XcbConnection) -> u32;
             fn xcb_flush(c: *mut XcbConnection) -> CInt;
-            fn xcb_poll_for_event(c: *mut XcbConnection) -> *mut XcbGenericEvent;
-            fn xcb_poll_for_queued_event(c: *mut XcbConnection) -> *mut XcbGenericEvent;
             fn xcb_get_maximum_request_length(c: *mut XcbConnection) -> u32;
             fn xcb_intern_atom(
                 c: *mut XcbConnection,
@@ -910,7 +900,6 @@ pub(crate) fn check_items() -> Vec<super::checks::LibraryItems> {
 #[cfg(test)]
 pub(crate) fn layouts() -> Vec<super::checks::StructItem> {
     vec![
-        XcbGenericEvent::layout(),
         XcbScreen::layout(),
         XcbScreenIterator::layout(),
         XcbInputEventMask::layout(),
@@ -1030,29 +1019,6 @@ fn take_reply<T>(reply: *mut T) -> Option<Bytes> {
     Some(Bytes(bytes))
 }
 
-/// Copies an event in wire format and frees it.
-fn take_event(event: *mut XcbGenericEvent) -> Option<Bytes> {
-    if event.is_null() {
-        return None;
-    }
-    let pointer = event.cast::<u8>().cast_const();
-    // SAFETY: libxcb allocates each event with the 36 bytes of
-    // `xcb_generic_event_t`.
-    let header = unsafe { table(pointer, 36) };
-    let mut bytes = header[..32].to_vec();
-    if header[0] & 0x7f == XCB_GE_GENERIC {
-        let length = 36 + word(header, 4) * 4;
-        // SAFETY: libxcb puts the `length` units of a generic event
-        // after `full_sequence`.
-        let all = unsafe { table(pointer, length) };
-        bytes.extend_from_slice(&all[36..]);
-    }
-    // SAFETY: libxcb allocated the event with `malloc`; it is not used
-    // again.
-    unsafe { free_malloc(event.cast::<c_void>()) };
-    Some(Bytes(bytes))
-}
-
 /// A connection to an X server and its default screen.
 pub(crate) struct Connection {
     xcb: &'static Xcb,
@@ -1062,12 +1028,18 @@ pub(crate) struct Connection {
     screen: XcbScreen,
     /// The screen in the setup data, for xcb-cursor.
     screen_pointer: *mut XcbScreen,
+    /// The Xlib display that owns the connection, or None when the
+    /// connection owns itself.
+    display: Option<Rc<SharedDisplay>>,
 }
 
 impl Drop for Connection {
     fn drop(&mut self) {
-        // SAFETY: the connection is owned and not used after this.
-        unsafe { (self.xcb.xcb_disconnect)(self.raw) }
+        // The Xlib display closes its own connection.
+        if self.display.is_none() {
+            // SAFETY: the connection is owned and not used after this.
+            unsafe { (self.xcb.xcb_disconnect)(self.raw) }
+        }
     }
 }
 
@@ -1103,6 +1075,30 @@ impl Connection {
             number,
             screen,
             screen_pointer,
+            display: None,
+        })
+    }
+
+    /// The connection of the Xlib display `display`, and its default
+    /// screen.
+    pub(crate) fn shared(display: Rc<SharedDisplay>) -> Result<Self, ConnectError> {
+        let xcb = Xcb::get().map_err(ConnectError::Library)?;
+        let raw = display.connection();
+        let number = display.default_screen();
+        let screen_pointer = Self::screen_of(xcb, raw, number);
+        if screen_pointer.is_null() {
+            return Err(ConnectError::Refused);
+        }
+        // SAFETY: the screen is in the setup data, which lives as long as
+        // the connection.
+        let screen = unsafe { *screen_pointer };
+        Ok(Self {
+            xcb,
+            raw,
+            number,
+            screen,
+            screen_pointer,
+            display: Some(display),
         })
     }
 
@@ -1142,11 +1138,6 @@ impl Connection {
         self.screen.root
     }
 
-    pub(crate) fn has_error(&self) -> bool {
-        // SAFETY: the connection is owned.
-        unsafe { (self.xcb.xcb_connection_has_error)(self.raw) != 0 }
-    }
-
     pub(crate) fn fd(&self) -> BorrowedFd<'_> {
         // SAFETY: the connection is owned.
         let fd = unsafe { (self.xcb.xcb_get_file_descriptor)(self.raw) };
@@ -1164,19 +1155,6 @@ impl Connection {
     pub(crate) fn flush(&self) -> bool {
         // SAFETY: the connection is owned.
         unsafe { (self.xcb.xcb_flush)(self.raw) > 0 }
-    }
-
-    /// The next event, reading the socket when none is queued.
-    pub(crate) fn poll_event(&self) -> Option<Bytes> {
-        // SAFETY: the connection is owned.
-        take_event(unsafe { (self.xcb.xcb_poll_for_event)(self.raw) })
-    }
-
-    /// The next event that libxcb already read, without reading the
-    /// socket.
-    pub(crate) fn poll_queued_event(&self) -> Option<Bytes> {
-        // SAFETY: the connection is owned.
-        take_event(unsafe { (self.xcb.xcb_poll_for_queued_event)(self.raw) })
     }
 
     /// The largest request, in bytes.

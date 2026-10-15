@@ -1,24 +1,22 @@
 //! Input methods with XIM, on-the-spot.
 //!
-//! The input method runs on its own Xlib connection (see `ffi::xlib`).
-//! A window has an input context while its text input state is active.
-//! The context has the focus while the window has it, and its spot is the
-//! bottom-left corner of the caret. Each key of such a window goes to the
-//! input method first. The keys that it does not use come back on the
-//! Xlib connection, with the committed text. The preedit callbacks give
-//! the marked text. `Composition` turns these events into `ImeEvent`s
-//! with UTF-16 ranges.
+//! The input method runs on the Xlib display of the connection (see
+//! `ffi::xlib`). A window has an input context while its text input state
+//! is active. The context has the focus while the window has it, and its
+//! spot is the bottom-left corner of the caret. Each key of such a window
+//! goes to the input method first. The keys that it does not use come
+//! back through the Xlib queue, with the committed text. The preedit
+//! callbacks give the marked text. `Composition` turns these events into
+//! `ImeEvent`s with UTF-16 ranges.
 //!
 //! When the input method stops, the marked text ends with `Unmark` and
-//! the contexts go. The connection then waits for an input method again.
+//! the contexts go. The display then waits for an input method again.
 //! When one opens, each window with an active text input state gets a
 //! new context.
 
 use super::{Client, X11Surface};
-use crate::ffi::x11::Bytes;
-use crate::ffi::xlib::{
-    self, ImEvent, InputContext, InputMethod, KeyInput, Opened, PreeditChange, XimDisplay,
-};
+use crate::ffi::xlib::{self, ImEvent, InputContext, InputMethod, Opened, PreeditChange, XimWatch};
+use crate::ffi::xlib_xcb::{SharedDisplay, XlibEvent};
 use crate::native::types::{ImeEvent, WindowEvent};
 use std::collections::HashMap;
 use std::collections::hash_map::Entry;
@@ -126,27 +124,29 @@ enum Instantiated {
     Unusable,
 }
 
-/// The Xlib connection, its input method, and the input contexts of the
-/// windows.
+/// The input method, its instantiate callback, and the input contexts of
+/// the windows.
 pub(crate) struct Ime {
-    display: Rc<XimDisplay>,
+    display: Rc<SharedDisplay>,
+    watch: XimWatch,
     method: Option<Rc<InputMethod>>,
     contexts: HashMap<u32, Context>,
     composition: Composition,
 }
 
 impl Ime {
-    /// Opens the Xlib connection and the input method of `XMODIFIERS`.
-    /// Without an input method, the connection waits for one. Returns None
-    /// without libX11 or a UTF-8 locale, and when the input method takes
-    /// no preedit callbacks, as the local input method of Xlib.
-    pub(crate) fn open() -> Option<Self> {
-        let display = XimDisplay::open()?;
-        if !display.watch() {
+    /// Opens the input method of `XMODIFIERS` on `display`. Without an
+    /// input method, the display waits for one. Returns None without a
+    /// UTF-8 locale, and when the input method takes no preedit callbacks,
+    /// as the local input method of Xlib.
+    pub(crate) fn open(display: &Rc<SharedDisplay>) -> Option<Self> {
+        let watch = XimWatch::new(display);
+        if !watch.watch() {
             return None;
         }
         let mut ime = Self {
-            display,
+            display: Rc::clone(display),
+            watch,
             method: None,
             contexts: HashMap::new(),
             composition: Composition::default(),
@@ -160,17 +160,17 @@ impl Ime {
     /// Opens the input method after the instantiate callback ran. The
     /// registration ends when an input method opens.
     fn instantiate(&mut self) -> Instantiated {
-        if self.method.is_some() || !self.display.take_instantiable() {
+        if self.method.is_some() || !self.watch.take_instantiable() {
             return Instantiated::Nothing;
         }
         match InputMethod::open(&self.display) {
             Opened::Method(method) => {
-                self.display.unwatch();
+                self.watch.unwatch();
                 self.method = Some(method);
                 Instantiated::Method
             }
             Opened::Unusable => {
-                self.display.unwatch();
+                self.watch.unwatch();
                 Instantiated::Unusable
             }
             Opened::Missing => Instantiated::Nothing,
@@ -184,14 +184,6 @@ impl Client {
             .borrow()
             .as_ref()
             .is_some_and(|ime| ime.method.is_some())
-    }
-
-    /// The Xlib connection of the input method, for the event loop.
-    pub(crate) fn xim_display(&self) -> Option<Rc<XimDisplay>> {
-        self.ime
-            .borrow()
-            .as_ref()
-            .map(|ime| Rc::clone(&ime.display))
     }
 
     /// Creates, focuses, places, or destroys the input context of
@@ -267,47 +259,37 @@ impl Client {
         xlib::take_preedit_changes();
     }
 
-    /// Gives an xcb key event of `window` to the input method. Returns
-    /// true when the input method took it.
-    pub(crate) fn ime_filter(&self, window: u32, event: &Bytes, pressed: bool) -> bool {
-        let Some(display) = self.xim_display() else {
-            return false;
-        };
+    /// Gives a key event to the input method. When the input context of
+    /// `window` has the focus, the event goes to that window first.
+    /// Returns true when the input method took it.
+    pub(crate) fn ime_filter_key(&self, window: u32, event: &mut XlibEvent) -> bool {
         let focused = self
             .ime
             .borrow()
             .as_ref()
             .and_then(|ime| ime.contexts.get(&window))
             .is_some_and(|context| context.focused);
-        if !focused {
-            return false;
+        if focused {
+            event.set_key_window(window);
         }
-        let taken = display.filter_key(KeyInput {
-            pressed,
-            window,
-            root: event.u32(8),
-            time: event.u32(4),
-            position: (event.i16(24), event.i16(26)),
-            root_position: (event.i16(20), event.i16(22)),
-            state: event.u16(28),
-            keycode: event.u8(1),
-        });
+        self.ime_filter(event)
+    }
+
+    /// Gives an event to the filters of Xlib, and handles the preedit
+    /// changes of the callbacks that ran. Returns true when a filter took
+    /// the event.
+    pub(crate) fn ime_filter(&self, event: &mut XlibEvent) -> bool {
+        let taken = self.display.filter(event);
         for change in xlib::take_preedit_changes() {
             self.ime_push(ImEvent::Preedit(change));
         }
-        self.ime_refresh();
         taken
     }
 
-    /// Handles what arrived on the Xlib connection, in order: the keys
-    /// that the input method did not use, the committed text, and the
-    /// preedit changes. Then follows a stop or a start of the input
-    /// method.
-    pub(crate) fn ime_dispatch(&self) {
-        let Some(display) = self.xim_display() else {
-            return;
-        };
-        let events = display.events(&|window| {
+    /// Handles an event that the input method put back into the queue: a
+    /// key that it did not use, or committed text.
+    pub(crate) fn ime_put_back(&self, event: &XlibEvent) {
+        let put_back = self.display.put_back(event, &|window| {
             self.ime
                 .borrow()
                 .as_ref()?
@@ -315,17 +297,15 @@ impl Client {
                 .get(&window)
                 .and_then(|context| context.context.raw())
         });
-        for event in events {
-            match event {
-                ImEvent::Key {
-                    window,
-                    keycode,
-                    pressed,
-                } => self.key_code(u32::from(keycode), pressed, window),
-                event => self.ime_push(event),
-            }
+        match put_back {
+            Some(ImEvent::Key {
+                window,
+                keycode,
+                pressed,
+            }) => self.key_code(u32::from(keycode), pressed, window),
+            Some(event) => self.ime_push(event),
+            None => {}
         }
-        self.ime_refresh();
     }
 
     /// Gives the `ImeEvent` of an event of the input method to its
@@ -345,16 +325,19 @@ impl Client {
 
     /// Ends the marked text and drops the contexts after the input method
     /// stopped. Opens the input method when the instantiate callback ran,
-    /// and gives each window with an active text input a context.
-    fn ime_refresh(&self) {
-        let (lost, unmarks, opened) = {
+    /// and gives each window with an active text input a context. Returns
+    /// true when the input method stopped or opened: the calls of Xlib can
+    /// then have read more events.
+    pub(crate) fn ime_refresh(&self) -> bool {
+        let (lost, unmarks, stopped, instantiated) = {
             let mut slot = self.ime.borrow_mut();
             let Some(ime) = slot.as_mut() else {
-                return;
+                return false;
             };
             let mut lost = HashMap::new();
             let mut unmarks = Vec::new();
-            if ime.method.as_ref().is_some_and(|method| !method.is_alive()) {
+            let stopped = ime.method.as_ref().is_some_and(|method| !method.is_alive());
+            if stopped {
                 // Xlib destroyed the method and its contexts, so the drops
                 // call no Xlib function.
                 lost = std::mem::take(&mut ime.contexts);
@@ -362,10 +345,9 @@ impl Client {
                 unmarks = ime.composition.end_all();
                 // Without a registration, the client stays without an
                 // input method.
-                ime.display.watch();
+                ime.watch.watch();
             }
-            let opened = matches!(ime.instantiate(), Instantiated::Method);
-            (lost, unmarks, opened)
+            (lost, unmarks, stopped, ime.instantiate())
         };
         drop(lost);
         for (id, event) in unmarks {
@@ -373,12 +355,13 @@ impl Client {
                 window.shared.push(WindowEvent::Ime(event));
             }
         }
-        if opened {
+        if matches!(instantiated, Instantiated::Method) {
             let windows: Vec<Rc<X11Surface>> = self.windows.borrow().clone();
             for window in windows {
                 self.text_input_changed(&window);
             }
         }
+        stopped || !matches!(instantiated, Instantiated::Nothing)
     }
 }
 

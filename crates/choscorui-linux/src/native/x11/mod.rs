@@ -1,7 +1,8 @@
 //! The X11 display server, over libxcb.
 //!
 //! `Client` owns the connection, the extensions, the keyboard and the
-//! pointer, and the windows. XKB with xkbcommon-x11 reads the keymap and
+//! pointer, and the windows. The connection is the xcb connection of an
+//! Xlib display, which reads the events for XIM (see `ffi::xlib_xcb`). XKB with xkbcommon-x11 reads the keymap and
 //! the modifiers, with detectable auto-repeat, so a held key arrives as
 //! repeated presses. XInput 2.2 sends the pointer events and the smooth
 //! scroll valuators; without it, core events stand in. The scale is
@@ -40,6 +41,8 @@ use crate::ffi::x11::{
     XCB_PROPERTY_NOTIFY, XCB_RANDR_NOTIFY, XCB_RANDR_SCREEN_CHANGE_NOTIFY, XCB_SHM_COMPLETION,
     XCB_UNMAP_NOTIFY, XCB_VISIBILITY_FULLY_OBSCURED, XCB_VISIBILITY_NOTIFY, XCB_XKB_STATE_NOTIFY,
 };
+use crate::ffi::xlib::XlibError;
+use crate::ffi::xlib_xcb::{Event, OpenError, SharedDisplay, XlibEvent};
 use crate::gles;
 use crate::touch::TouchPointer;
 use crate::x11_scale::{self, Monitor};
@@ -168,6 +171,8 @@ struct Seat {
 /// A connection to an X server and its windows.
 pub(crate) struct Client {
     pub(crate) connection: Connection,
+    /// The Xlib display of the connection, which reads the events.
+    display: Rc<SharedDisplay>,
     pub(crate) atoms: Atoms,
     extensions: Extensions,
     shm: Cell<bool>,
@@ -193,11 +198,11 @@ pub(crate) struct Client {
     atom_ids: RefCell<HashMap<String, u32>>,
     atom_names: RefCell<HashMap<u32, String>>,
     /// The events that arrived during a nested wait, for the loop.
-    deferred: RefCell<VecDeque<Bytes>>,
+    deferred: RefCell<VecDeque<Event>>,
     /// The server time of the latest input or property event.
     time: Cell<u32>,
-    /// The XIM connection and its input method. None without libX11, or
-    /// when the input method takes no preedit callbacks.
+    /// The input method of XIM. None without a UTF-8 locale, or when the
+    /// input method takes no preedit callbacks.
     ime: RefCell<Option<ime::Ime>>,
     /// The GLES painter, unless it is not available or
     /// `CHOSCORUI_PAINTER=cairo` asks for Cairo.
@@ -274,17 +279,25 @@ fn read_monitors(connection: &Connection, randr: bool) -> Vec<Monitor> {
 impl Client {
     /// Connects to the server of `DISPLAY` and sets up the extensions.
     pub(crate) fn connect() -> Result<Rc<Self>, Error> {
-        let connection = Connection::connect().map_err(|error| match error {
-            ConnectError::Library(error) => Error::Library(error),
-            ConnectError::Refused => {
-                Error::NoDisplay("the X server of DISPLAY refused the connection".to_owned())
+        let refused =
+            || Error::NoDisplay("the X server of DISPLAY refused the connection".to_owned());
+        let display = SharedDisplay::open().map_err(|error| match error {
+            OpenError::Library(XlibError::Library(error)) => Error::Library(error),
+            OpenError::Library(XlibError::Threads) => {
+                Error::Connection("XInitThreads failed".to_owned())
             }
+            OpenError::Refused => refused(),
+        })?;
+        let connection = Connection::shared(Rc::clone(&display)).map_err(|error| match error {
+            ConnectError::Library(error) => Error::Library(error),
+            ConnectError::Refused => refused(),
         })?;
         let mut keyboard = Keyboard::new().map_err(Error::Library)?;
         let atoms = Atoms::intern(&connection);
         let xkb_event = connection.xkb_setup();
         let mut detectable_repeat = false;
-        if xkb_event.is_some() {
+        if let Some(code) = xkb_event {
+            display.watch_event(code);
             connection.xkb_select_events();
             detectable_repeat = connection.xkb_detectable_auto_repeat();
             keyboard.set_state(connection.xkb_state(keyboard.context()));
@@ -298,9 +311,15 @@ impl Client {
             .query_extension("XInputExtension")
             .filter(|_| connection.xi_query_version())
             .map(|(opcode, _)| opcode);
+        if let Some(opcode) = xinput {
+            display.watch_generic(opcode);
+        }
         let shm = connection
             .query_extension("MIT-SHM")
             .filter(|_| connection.shm_available());
+        if let Some((_, first)) = shm {
+            display.watch_event(first.wrapping_add(XCB_SHM_COMPLETION));
+        }
         let scrolling = if xinput.is_some() {
             connection
                 .xi_query_devices()
@@ -319,8 +338,12 @@ impl Client {
         // The root window reports the changes of the monitors.
         let randr_event = connection
             .query_extension("RANDR")
-            .filter(|_| connection.randr_select_changes())
-            .map(|(_, first)| first);
+            .map(|(_, first)| first)
+            .filter(|first| {
+                display.watch_event(first.wrapping_add(XCB_RANDR_SCREEN_CHANGE_NOTIFY));
+                display.watch_event(first.wrapping_add(XCB_RANDR_NOTIFY));
+                connection.randr_select_changes()
+            });
         let monitors = read_monitors(&connection, randr_event.is_some());
         let transfer_atoms = selection::TransferAtoms::intern(&connection);
         let selection_window = connection.generate_id();
@@ -335,6 +358,9 @@ impl Client {
             .query_extension("Present")
             .filter(|_| connection.present_available())
             .map(|(opcode, _)| opcode);
+        if let Some(opcode) = present {
+            display.watch_generic(opcode);
+        }
         let mut input = LinuxInput::new();
         // XInput 2.2 sends the touch events.
         input.update_seat(true, true, xinput.is_some());
@@ -346,8 +372,10 @@ impl Client {
         } else {
             gles::Device::x11(connection.screen().root_visual).ok()
         };
+        let ime = ime::Ime::open(&display);
         Ok(Rc::new(Self {
             connection,
+            display,
             atoms,
             extensions: Extensions {
                 xkb_event,
@@ -386,7 +414,7 @@ impl Client {
             atom_names: RefCell::new(HashMap::new()),
             deferred: RefCell::new(VecDeque::new()),
             time: Cell::new(0),
-            ime: RefCell::new(ime::Ime::open()),
+            ime: RefCell::new(ime),
             gles,
             grab: RefCell::new(None),
         }))
@@ -679,7 +707,9 @@ impl Client {
         }
     }
 
+    /// Sends the requests of Xlib and of xcb.
     pub(crate) fn flush(&self) {
+        self.display.flush();
         self.connection.flush();
     }
 
@@ -693,25 +723,18 @@ impl Client {
     ) -> Result<Vec<Ready>, Error> {
         self.check()?;
         self.handle_all();
-        // The filter of a key can read input method events into the Xlib
-        // queue, where the descriptor no longer shows them.
-        self.ime_dispatch();
         self.paint();
-        self.connection.flush();
-        let mut queued = false;
-        while let Some(event) = self.connection.poll_queued_event() {
-            self.handle(&event);
-            queued = true;
-        }
-        queued |= self.handle_deferred();
+        self.flush();
+        // The paint and the flush can read events into the queues, where
+        // the descriptor no longer shows them.
+        let queued = self.handle_all();
         self.check()?;
         let timeout = match (queued, self.expire_drag()) {
             (true, _) => Some(Duration::ZERO),
             (false, Some(left)) => Some(timeout.map_or(left, |timeout| timeout.min(left))),
             (false, None) => timeout,
         };
-        let xim = self.xim_display();
-        let mut watches = Vec::with_capacity(extra.len() + 2);
+        let mut watches = Vec::with_capacity(extra.len() + 1);
         watches.push(Watch {
             fd: self.connection.fd(),
             read: true,
@@ -722,54 +745,43 @@ impl Client {
             read: watch.read,
             write: watch.write,
         }));
-        if let Some(xim) = &xim {
-            watches.push(Watch {
-                fd: xim.fd(),
-                read: true,
-                write: false,
-            });
-        }
         let ready =
             libc::wait(&watches, timeout).map_err(|error| Error::Connection(error.to_string()))?;
         drop(watches);
-        drop(xim);
-        self.ime_dispatch();
         self.handle_all();
         self.expire_drag();
         self.check()?;
         Ok(ready[1..=extra.len()].to_vec())
     }
 
-    /// Handles the events that arrived, and those that a nested wait kept.
-    fn handle_all(&self) {
-        loop {
-            self.handle_deferred();
-            let Some(event) = self.connection.poll_event() else {
-                break;
-            };
-            self.handle(&event);
-        }
-        self.handle_deferred();
-    }
-
-    /// Handles the events that a nested wait kept. Returns true when there
-    /// were any.
-    fn handle_deferred(&self) -> bool {
+    /// Handles the events that a nested wait kept, then the events of the
+    /// connection, until none is left. A change of the input method can
+    /// read more events, so the loop runs again after one. Returns true
+    /// when there were events.
+    fn handle_all(&self) -> bool {
         let mut handled = false;
         loop {
-            let event = self.deferred.borrow_mut().pop_front();
-            let Some(event) = event else {
+            while let Some(event) = self.next_event() {
+                self.handle(event);
+                handled = true;
+            }
+            if !self.ime_refresh() {
                 return handled;
-            };
-            self.handle(&event);
-            handled = true;
+            }
         }
+    }
+
+    /// The next event that a nested wait kept, else the next event of the
+    /// connection.
+    fn next_event(&self) -> Option<Event> {
+        let deferred = self.deferred.borrow_mut().pop_front();
+        deferred.or_else(|| self.display.next_event())
     }
 
     /// Fails when the connection broke. The first failure sends
     /// `Closing` to every window.
     fn check(&self) -> Result<(), Error> {
-        if !self.connection.has_error() {
+        if !self.display.lost() {
             return Ok(());
         }
         if !self.lost.replace(true) {
@@ -782,13 +794,36 @@ impl Client {
         ))
     }
 
-    fn handle(&self, event: &Bytes) {
-        let kind = event.u8(0) & 0x7f;
-        if kind == 0 {
-            self.error(event);
+    /// Handles an event of the connection. Each event of the server goes
+    /// to the filters of Xlib first, where XIM reads its messages and the
+    /// keys of the input context with the focus.
+    fn handle(&self, event: Event) {
+        let (bytes, mut event) = match event {
+            Event::Error(bytes) => {
+                self.error(&bytes);
+                return;
+            }
+            Event::PutBack(event) => {
+                self.ime_put_back(&event);
+                return;
+            }
+            Event::Server(bytes, event) => (bytes, event),
+        };
+        let kind = bytes.u8(0) & 0x7f;
+        self.note_time(kind, &bytes);
+        if kind == XCB_KEY_PRESS || kind == XCB_KEY_RELEASE {
+            self.key(&bytes, &mut event, kind == XCB_KEY_PRESS);
             return;
         }
-        self.note_time(kind, event);
+        if self.ime_filter(&mut event) {
+            return;
+        }
+        self.handle_wire(&bytes);
+    }
+
+    /// Handles an event of the server in wire format.
+    fn handle_wire(&self, event: &Bytes) {
+        let kind = event.u8(0) & 0x7f;
         if self.selection_event(event) {
             return;
         }
@@ -813,7 +848,6 @@ impl Client {
             return;
         }
         match kind {
-            XCB_KEY_PRESS | XCB_KEY_RELEASE => self.key(event, kind == XCB_KEY_PRESS),
             XCB_BUTTON_PRESS | XCB_BUTTON_RELEASE => {
                 self.set_root(i32::from(event.i16(20)), i32::from(event.i16(22)));
                 self.button(
@@ -1034,12 +1068,12 @@ impl Client {
         }
     }
 
-    fn key(&self, event: &Bytes, pressed: bool) {
-        let window = self.key_target().map_or(event.u32(12), |window| window.id);
-        if self.ime_filter(window, event, pressed) {
+    fn key(&self, bytes: &Bytes, event: &mut XlibEvent, pressed: bool) {
+        let window = self.key_target().map_or(bytes.u32(12), |window| window.id);
+        if self.ime_filter_key(window, event) {
             return;
         }
-        self.key_code(u32::from(event.u8(1)), pressed, window);
+        self.key_code(u32::from(bytes.u8(1)), pressed, window);
     }
 
     /// Handles a key of `id`, or of the window with the keyboard focus.

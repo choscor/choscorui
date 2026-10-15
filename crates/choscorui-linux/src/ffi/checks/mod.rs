@@ -65,10 +65,30 @@ fn function_pointer(function: &FunctionItem) -> String {
     } else if args.is_empty() {
         args.push_str("void");
     }
-    format!(
-        "{} (*const check_{})({})",
-        function.ret, function.name, args
-    )
+    let ret = if returns_function_pointer(function) {
+        return_typedef(function)
+    } else {
+        function.ret.clone()
+    };
+    format!("{ret} (*const check_{})({args})", function.name)
+}
+
+/// True when `function` returns a function pointer, such as
+/// `XESetWireToEvent`. A declarator cannot take such a return type after
+/// its name, so the check names it with a typedef.
+fn returns_function_pointer(function: &FunctionItem) -> bool {
+    function.ret.contains("(*)")
+}
+
+/// The name of the typedef of the return type of `function`.
+fn return_typedef(function: &FunctionItem) -> String {
+    format!("check_ret_{}", function.name)
+}
+
+/// The typedef of the function pointer that `function` returns.
+fn return_typedef_line(function: &FunctionItem) -> String {
+    let named = format!("(*{})", return_typedef(function));
+    format!("typedef {};", function.ret.replacen("(*)", &named, 1))
 }
 
 /// The lines of the C file, without the includes.
@@ -80,6 +100,12 @@ fn check_lines(
     let mut lines = Vec::new();
     for library in libraries {
         for function in &library.functions {
+            if returns_function_pointer(function) {
+                lines.push(Line {
+                    text: return_typedef_line(function),
+                    item: format!("{} in {}", function.name, library.library.name),
+                });
+            }
             lines.push(Line {
                 text: match function.typedef {
                     // A null pointer of the typedef converts to the declared
@@ -306,6 +332,25 @@ fn a_changed_declaration_fails_and_names_the_symbol() {
     assert!(
         report.contains(&format!("constant {constant_name}")),
         "{report}"
+    );
+}
+
+#[test]
+fn a_returned_function_pointer_gets_a_typedef() {
+    let function = FunctionItem {
+        name: "set_handler",
+        ret: "int32_t (*)(char *)".to_owned(),
+        args: vec!["int32_t (*)(char *)".to_owned()],
+        variadic: false,
+        typedef: None,
+    };
+    assert_eq!(
+        return_typedef_line(&function),
+        "typedef int32_t (*check_ret_set_handler)(char *);"
+    );
+    assert_eq!(
+        function_pointer(&function),
+        "check_ret_set_handler (*const check_set_handler)(int32_t (*)(char *))"
     );
 }
 

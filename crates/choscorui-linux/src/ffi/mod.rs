@@ -32,6 +32,7 @@ pub(crate) mod wayland;
 pub(crate) mod x11;
 pub(crate) mod xkb;
 pub(crate) mod xlib;
+pub(crate) mod xlib_xcb;
 
 pub use dl::LoadError;
 pub use process::{CountingAllocator, allocation_count};
@@ -72,6 +73,7 @@ pub(crate) fn declarations() -> (
     libraries.extend(codecs::check_items());
     libraries.extend(x11::check_items());
     libraries.push(xlib::Xlib::check_items());
+    libraries.push(xlib_xcb::XlibXcb::check_items());
     let mut structs = vec![
         libc::PollFd::layout(),
         libc::Timespec::layout(),

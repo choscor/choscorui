@@ -1,27 +1,25 @@
-//! The declarations of libX11 for XIM, a safe input method on its own
-//! Xlib connection, and the Xlib connection of the EGL display.
+//! The declarations of libX11, and XIM: the input method protocol of
+//! Xlib.
 //!
-//! The X11 backend reads its events through xcb. XIM needs Xlib: the
-//! input method protocol and its text conversions live there. The XIM
-//! transport waits for its replies in `XIfEvent`, so Xlib must own the
-//! event queue of its connection. With `XCBOwnsEventQueue`, `XIfEvent`
-//! never gets an event and spins. Thus the input method opens a second
-//! connection with `XOpenDisplay`, and the input contexts name the xcb
-//! windows. The client gives each key event of an active window to
-//! `XFilterEvent`. The input method sends back the keys that it does not
-//! use and the committed text on the Xlib connection, which the event loop
-//! drains. The preedit callbacks queue their changes on the thread, for
-//! the client to read.
+//! The X11 backend has one connection: an Xlib display whose socket xcb
+//! shares (see `xlib_xcb`). XIM runs on that display. The client gives
+//! each key event of a window with a focused input context to
+//! `XFilterEvent`. The input method puts the keys that it does not use and
+//! the committed text back into the Xlib queue, where the event loop reads
+//! them. The preedit callbacks queue their changes on the thread, for the
+//! client to read.
 //!
-//! The connection registers an instantiate callback while it has no input
+//! The display registers an instantiate callback while it has no input
 //! method, so a server that starts or restarts opens again. The destroy
 //! callback of an input method marks it dead: Xlib then destroyed it and
-//! its contexts, and the client must not close them again.
+//! its contexts, and the client must not close them again. After the
+//! connection is lost, the input method makes no call that waits for the
+//! XIM server, because `XIfEvent` would wait for its reply forever.
 
-use super::ctypes::{CChar, CInt, CLong, CUlong, c_void};
+use super::ctypes::{CChar, CInt, CLong, CUint, CUlong, c_void};
 use super::macros::{c_consts, callback, ffi_struct, ffi_union, libraries, opaque_types};
+use super::xlib_xcb::{SharedDisplay, XlibEvent};
 use std::cell::{Cell, RefCell};
-use std::os::fd::BorrowedFd;
 use std::rc::Rc;
 use std::sync::OnceLock;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -35,6 +33,12 @@ opaque_types! {
     pub(crate) XicRec = "struct _XIC";
     /// `struct _XrmHashBucketRec`, the target of `XrmDatabase`.
     pub(crate) XrmHashBucketRec = "struct _XrmHashBucketRec";
+    /// `xEvent`: an event in the wire format of the protocol.
+    pub(crate) XWireEvent = "xEvent";
+    /// `xError`: an error in the wire format of the protocol.
+    pub(crate) XWireError = "xError";
+    /// `XErrorEvent`, which the error hook does not read.
+    pub(crate) XErrorEventRec = "XErrorEvent";
 }
 
 /// `XIMProc` with the input context first, as Xlib calls it for the
@@ -51,7 +55,39 @@ pub(crate) type XicProc = Option<unsafe extern "C" fn(*mut XicRec, *mut CChar, *
 /// `XIDProc`, the instantiate callback.
 pub(crate) type XidProc = Option<unsafe extern "C" fn(*mut XDisplay, *mut CChar, *mut CChar)>;
 
+/// The procedure that converts a wire event of one code into an
+/// `XEvent` of the queue, for `XESetWireToEvent`. It returns false when
+/// the queue drops the event.
+pub(crate) type WireToEventProc =
+    Option<unsafe extern "C" fn(*mut XDisplay, *mut XEvent, *mut XWireEvent) -> CInt>;
+
+/// The procedure that converts a generic event of one extension into an
+/// `XGenericEventCookie` of the queue, for `XESetWireToEventCookie`.
+pub(crate) type WireToCookieProc =
+    Option<unsafe extern "C" fn(*mut XDisplay, *mut XGenericEventCookie, *mut XWireEvent) -> CInt>;
+
+/// The procedure that sees an error of one code before the error
+/// handler, for `XESetWireToError`. It returns false when the error is
+/// handled.
+pub(crate) type WireToErrorProc =
+    Option<unsafe extern "C" fn(*mut XDisplay, *mut XErrorEventRec, *mut XWireError) -> CInt>;
+
+/// `XIOErrorHandler`.
+pub(crate) type IoErrorHandler = Option<unsafe extern "C" fn(*mut XDisplay) -> CInt>;
+
+/// `XIOErrorExitHandler`.
+pub(crate) type IoErrorExitHandler = Option<unsafe extern "C" fn(*mut XDisplay, *mut c_void)>;
+
 ffi_struct! {
+    /// `XAnyEvent`: the fields that each event starts with.
+    pub(crate) struct XAnyEvent = "XAnyEvent" {
+        pub(crate) r#type: CInt,
+        pub(crate) serial: CUlong,
+        pub(crate) send_event: CInt,
+        pub(crate) display: *mut XDisplay,
+        pub(crate) window: CUlong,
+    }
+
     /// `XKeyEvent`.
     pub(crate) struct XKeyEvent = "XKeyEvent" {
         pub(crate) r#type: CInt,
@@ -69,6 +105,18 @@ ffi_struct! {
         pub(crate) state: u32,
         pub(crate) keycode: u32,
         pub(crate) same_screen: CInt,
+    }
+
+    /// `XGenericEventCookie`: a generic event in the queue.
+    pub(crate) struct XGenericEventCookie = "XGenericEventCookie" {
+        pub(crate) r#type: CInt,
+        pub(crate) serial: CUlong,
+        pub(crate) send_event: CInt,
+        pub(crate) display: *mut XDisplay,
+        pub(crate) extension: CInt,
+        pub(crate) evtype: CInt,
+        pub(crate) cookie: CUint,
+        pub(crate) data: *mut c_void,
     }
 
     /// `XIMCallback`, for the preedit callbacks of an input context.
@@ -122,30 +170,54 @@ ffi_union! {
     /// `XEvent`.
     pub(crate) union XEvent = "XEvent" {
         pub(crate) r#type: CInt,
+        pub(crate) xany: XAnyEvent,
         pub(crate) xkey: XKeyEvent,
+        pub(crate) xcookie: XGenericEventCookie,
         pub(crate) pad: [CLong; 24],
     }
 }
 
 libraries! {
-    /// libX11: the input method protocol of XIM.
+    /// libX11: the display of the X11 connection, and the input method
+    /// protocol of XIM.
     pub(crate) struct Xlib {
         library: "libX11",
         sonames: ["libX11.so.6"],
-        headers: ["X11/Xlib.h", "X11/Xutil.h"],
+        headers: ["X11/Xlib.h", "X11/Xutil.h", "X11/Xlibint.h"],
         pkg_config: "x11",
         package: "libx11-dev",
         functions {
             fn XInitThreads() -> CInt;
             fn XOpenDisplay(name: *const CChar) -> *mut XDisplay;
             fn XCloseDisplay(display: *mut XDisplay) -> CInt;
-            fn XConnectionNumber(display: *mut XDisplay) -> CInt;
             fn XDefaultScreen(display: *mut XDisplay) -> CInt;
-            fn XPending(display: *mut XDisplay) -> CInt;
+            fn XRootWindow(display: *mut XDisplay, screen: CInt) -> CUlong;
+            fn XEventsQueued(display: *mut XDisplay, mode: CInt) -> CInt;
             fn XNextEvent(display: *mut XDisplay, event: *mut XEvent) -> CInt;
             fn XFlush(display: *mut XDisplay) -> CInt;
             fn XFilterEvent(event: *mut XEvent, window: CUlong) -> CInt;
             fn XFree(data: *mut c_void) -> CInt;
+            fn XESetWireToEvent(
+                display: *mut XDisplay,
+                event_number: CInt,
+                handler: WireToEventProc,
+            ) -> WireToEventProc;
+            fn XESetWireToEventCookie(
+                display: *mut XDisplay,
+                extension: CInt,
+                handler: WireToCookieProc,
+            ) -> WireToCookieProc;
+            fn XESetWireToError(
+                display: *mut XDisplay,
+                error_number: CInt,
+                handler: WireToErrorProc,
+            ) -> WireToErrorProc;
+            fn XSetIOErrorHandler(handler: IoErrorHandler) -> IoErrorHandler;
+            fn XSetIOErrorExitHandler(
+                display: *mut XDisplay,
+                handler: IoErrorExitHandler,
+                user_data: *mut c_void,
+            );
             fn XSupportsLocale() -> CInt;
             fn XSetLocaleModifiers(modifiers: *const CChar) -> *mut CChar;
             fn XOpenIM(
@@ -196,9 +268,11 @@ libraries! {
 c_consts! {
     /// The constants of this module, for the binding check.
     pub(crate) fn constants;
-    const KEY_PRESS: CInt = 2 => "KeyPress";
-    const KEY_RELEASE: CInt = 3 => "KeyRelease";
+    pub(crate) const KEY_PRESS: CInt = 2 => "KeyPress";
+    pub(crate) const KEY_RELEASE: CInt = 3 => "KeyRelease";
     const PROPERTY_NOTIFY: CInt = 28 => "PropertyNotify";
+    pub(crate) const GENERIC_EVENT: CInt = 35 => "GenericEvent";
+    pub(crate) const QUEUED_AFTER_READING: CInt = 1 => "QueuedAfterReading";
     const XIM_PREEDIT_CALLBACKS: CUlong = 0x0002 => "XIMPreeditCallbacks";
     const XIM_STATUS_NOTHING: CUlong = 0x0400 => "XIMStatusNothing";
     const XIM_STATUS_NONE: CUlong = 0x0800 => "XIMStatusNone";
@@ -358,7 +432,7 @@ callback! {
     ///
     /// # Safety
     ///
-    /// The client data is the `AtomicBool` of an `XimDisplay`, which lives
+    /// The client data is the `AtomicBool` of an `XimWatch`, which lives
     /// until its registration ends.
     fn instantiated(_display: *mut XDisplay, client_data: *mut CChar, _data: *mut CChar)
         [boundary "XIM instantiate", fallback ()]
@@ -404,7 +478,7 @@ impl XlibDisplay {
     /// Opens the connection. Returns None without libX11 or when the
     /// server refuses.
     pub(crate) fn open() -> Option<Self> {
-        let lib = Xlib::get().ok()?;
+        let lib = library().ok()?;
         // SAFETY: null opens the display of `DISPLAY`.
         let raw = unsafe { (lib.XOpenDisplay)(std::ptr::null()) };
         (!raw.is_null()).then_some(Self { lib, raw })
@@ -433,21 +507,7 @@ pub(crate) fn take_preedit_changes() -> Vec<PreeditChange> {
     CHANGES.with(|changes| std::mem::take(&mut *changes.borrow_mut()))
 }
 
-/// A key event for `XFilterEvent`, from an xcb key event.
-#[derive(Clone, Copy, Debug)]
-pub(crate) struct KeyInput {
-    pub(crate) pressed: bool,
-    pub(crate) window: u32,
-    pub(crate) root: u32,
-    pub(crate) time: u32,
-    pub(crate) position: (i16, i16),
-    pub(crate) root_position: (i16, i16),
-    pub(crate) state: u16,
-    pub(crate) keycode: u8,
-}
-
-/// An event that the input method sent on the Xlib connection, in the
-/// order of arrival.
+/// An event that the input method put back into the Xlib queue.
 #[derive(Clone, Debug, PartialEq)]
 pub(crate) enum ImEvent {
     /// A key that the input method did not use.
@@ -462,17 +522,28 @@ pub(crate) enum ImEvent {
     Preedit(PreeditChange),
 }
 
-/// The library after `XInitThreads`, or `None` when it does not load.
-/// Each thread of a process can open its own input method, so Xlib must
-/// lock its global state. `XInitThreads` must come before any other Xlib
-/// call.
-fn library() -> Option<&'static Xlib> {
+/// Why libX11 is not usable.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub(crate) enum XlibError {
+    Library(super::dl::LoadError),
+    /// `XInitThreads` failed.
+    Threads,
+}
+
+/// The library after `XInitThreads`. Windows on other threads open their
+/// own displays and input methods, so Xlib must lock its global state.
+/// `XInitThreads` must come before any other Xlib call.
+pub(in crate::ffi) fn library() -> Result<&'static Xlib, XlibError> {
     static READY: OnceLock<bool> = OnceLock::new();
-    let lib = Xlib::get().ok()?;
+    let lib = Xlib::get().map_err(XlibError::Library)?;
     // SAFETY: the first call of the process, before any other Xlib call
     // of this crate.
     let ready = *READY.get_or_init(|| unsafe { (lib.XInitThreads)() } != 0);
-    ready.then_some(lib)
+    if ready {
+        Ok(lib)
+    } else {
+        Err(XlibError::Threads)
+    }
 }
 
 /// Calls `f` with the UTF-8 locale and the modifiers of `XMODIFIERS`.
@@ -492,31 +563,28 @@ fn with_xim_locale<T>(lib: &Xlib, f: impl FnOnce() -> T) -> Option<T> {
     .flatten()
 }
 
-/// The Xlib connection of the input method. While it has no input method,
-/// it watches for one to start.
-pub(crate) struct XimDisplay {
-    lib: &'static Xlib,
-    raw: *mut XDisplay,
+/// True for a `PropertyNotify` event, whose filter can be the filter of
+/// the instantiate callbacks.
+fn is_property_notify(kind: CInt) -> bool {
+    kind == PROPERTY_NOTIFY
+}
+
+/// The instantiate callback of a display. While the client has no input
+/// method, it watches for one to start.
+pub(crate) struct XimWatch {
+    display: Rc<SharedDisplay>,
     /// Set by the instantiate callback.
     instantiable: Box<AtomicBool>,
     watching: Cell<bool>,
 }
 
-impl XimDisplay {
-    /// Opens a connection to the server of `DISPLAY`. Returns None
-    /// without libX11 or when the server refuses.
-    pub(crate) fn open() -> Option<Rc<Self>> {
-        let lib = library()?;
-        // SAFETY: null opens the display of `DISPLAY`.
-        let raw = unsafe { (lib.XOpenDisplay)(std::ptr::null()) };
-        (!raw.is_null()).then(|| {
-            Rc::new(Self {
-                lib,
-                raw,
-                instantiable: Box::new(AtomicBool::new(false)),
-                watching: Cell::new(false),
-            })
-        })
+impl XimWatch {
+    pub(crate) fn new(display: &Rc<SharedDisplay>) -> Self {
+        Self {
+            display: Rc::clone(display),
+            instantiable: Box::new(AtomicBool::new(false)),
+            watching: Cell::new(false),
+        }
     }
 
     /// The client data of the instantiate callback.
@@ -527,17 +595,21 @@ impl XimDisplay {
     /// Registers the instantiate callback. When an input method of
     /// `XMODIFIERS` is already there, Xlib calls it during the
     /// registration. Returns false when the registration failed, as
-    /// without a UTF-8 locale.
+    /// without a UTF-8 locale or after the connection is lost.
     pub(crate) fn watch(&self) -> bool {
         if self.watching.get() {
             return true;
         }
-        let registered = with_xim_locale(self.lib, || {
+        if self.display.lost() {
+            return false;
+        }
+        let lib = self.display.lib();
+        let registered = with_xim_locale(lib, || {
             // SAFETY: the display is open; null takes the defaults. The
             // flag lives until `unwatch` or the drop of `self`.
             unsafe {
-                (self.lib.XRegisterIMInstantiateCallback)(
-                    self.raw,
+                (lib.XRegisterIMInstantiateCallback)(
+                    self.display.raw(),
                     std::ptr::null_mut(),
                     std::ptr::null_mut(),
                     std::ptr::null_mut(),
@@ -548,20 +620,23 @@ impl XimDisplay {
         });
         self.watching
             .set(registered.is_some_and(|registered| registered != 0));
-        self.flush();
+        self.display.flush();
         self.watching.get()
     }
 
-    /// Ends the registration of the instantiate callback.
+    /// Ends the registration of the instantiate callback. The call does
+    /// no I/O, so it also runs after the connection is lost: the list of
+    /// callbacks belongs to the process.
     pub(crate) fn unwatch(&self) {
         if !self.watching.replace(false) {
             return;
         }
-        with_xim_locale(self.lib, || {
+        let lib = self.display.lib();
+        with_xim_locale(lib, || {
             // SAFETY: the arguments match those of the registration.
             unsafe {
-                (self.lib.XUnregisterIMInstantiateCallback)(
-                    self.raw,
+                (lib.XUnregisterIMInstantiateCallback)(
+                    self.display.raw(),
                     std::ptr::null_mut(),
                     std::ptr::null_mut(),
                     std::ptr::null_mut(),
@@ -570,117 +645,74 @@ impl XimDisplay {
                 )
             }
         });
-        self.flush();
+        self.display.flush();
     }
 
     /// True once after the instantiate callback ran.
     pub(crate) fn take_instantiable(&self) -> bool {
         self.instantiable.swap(false, Ordering::Acquire)
     }
+}
 
-    /// The descriptor of the Xlib connection, for the event loop.
-    pub(crate) fn fd(&self) -> BorrowedFd<'_> {
-        // SAFETY: the display is open.
-        let fd = unsafe { (self.lib.XConnectionNumber)(self.raw) };
-        // SAFETY: the display owns the descriptor while `self` lives.
-        unsafe { BorrowedFd::borrow_raw(fd) }
+impl Drop for XimWatch {
+    fn drop(&mut self) {
+        self.unwatch();
     }
+}
 
-    fn flush(&self) {
-        // SAFETY: the display is open.
-        unsafe { (self.lib.XFlush)(self.raw) };
-    }
-
-    /// Gives a key event to the input method. Returns true when the input
-    /// method took it.
-    pub(crate) fn filter_key(&self, key: KeyInput) -> bool {
-        let mut event = XEvent {
-            xkey: XKeyEvent {
-                r#type: if key.pressed { KEY_PRESS } else { KEY_RELEASE },
-                serial: 0,
-                send_event: 0,
-                display: self.raw,
-                window: CUlong::from(key.window),
-                root: CUlong::from(key.root),
-                subwindow: 0,
-                time: CUlong::from(key.time),
-                x: CInt::from(key.position.0),
-                y: CInt::from(key.position.1),
-                x_root: CInt::from(key.root_position.0),
-                y_root: CInt::from(key.root_position.1),
-                state: u32::from(key.state),
-                keycode: u32::from(key.keycode),
-                same_screen: 1,
-            },
+impl SharedDisplay {
+    /// Gives an event to the filters of Xlib: the key filter of an input
+    /// context, the transport and the server watch of XIM, and the
+    /// instantiate callbacks. Returns true when a filter took the event.
+    /// After the connection is lost, no filter runs.
+    pub(crate) fn filter(&self, event: &mut XlibEvent) -> bool {
+        if self.lost() {
+            return false;
+        }
+        let lib = self.lib();
+        // The filter of the instantiate callbacks watches the root window
+        // of screen 0, and reads the list of the callbacks.
+        let watched = is_property_notify(event.kind()) && event.window() == self.root0();
+        let raw = event.raw();
+        let filter = || {
+            // SAFETY: the event is a whole event of this display.
+            unsafe { (lib.XFilterEvent)(raw, 0) != 0 }
         };
-        // SAFETY: the event is a valid key event of this display.
-        let taken = unsafe { (self.lib.XFilterEvent)(&raw mut event, 0) } != 0;
-        self.flush();
-        taken
-    }
-
-    /// Gives an event of the connection to the filters of Xlib. Returns
-    /// true when a filter took it.
-    fn filter(&self, event: &mut XEvent) -> bool {
-        // SAFETY: every event starts with its type.
-        let property = unsafe { event.r#type } == PROPERTY_NOTIFY;
-        let lib = self.lib;
-        let mut filter = || {
-            // SAFETY: the event came from Xlib.
-            unsafe { (lib.XFilterEvent)(event, 0) != 0 }
-        };
-        if property {
-            // The filter of the instantiate callbacks reads their list.
+        if watched {
             return with_xim_locale(lib, filter).unwrap_or(false);
         }
         filter()
     }
 
-    /// Reads the events of the Xlib connection, in order. Each goes
-    /// through the filters of Xlib first, where the preedit callbacks and
-    /// the destroy callback run. `contexts` gives the open context of a
-    /// window, for the committed text.
-    pub(crate) fn events(&self, contexts: &dyn Fn(u32) -> Option<*mut XicRec>) -> Vec<ImEvent> {
-        let mut events: Vec<ImEvent> = take_preedit_changes()
-            .into_iter()
-            .map(ImEvent::Preedit)
-            .collect();
-        // SAFETY: the display is open; the call does not block.
-        while unsafe { (self.lib.XPending)(self.raw) } > 0 {
-            let mut event = XEvent { pad: [0; 24] };
-            // SAFETY: an event is pending, so the call does not block.
-            unsafe { (self.lib.XNextEvent)(self.raw, &raw mut event) };
-            let filtered = self.filter(&mut event);
-            events.extend(take_preedit_changes().into_iter().map(ImEvent::Preedit));
-            if filtered {
-                continue;
-            }
-            // SAFETY: every event starts with its type.
-            let kind = unsafe { event.r#type };
-            if kind != KEY_PRESS && kind != KEY_RELEASE {
-                continue;
-            }
-            // SAFETY: the type says that the event is a key event.
-            let mut key = unsafe { event.xkey };
-            let window = u32::try_from(key.window).unwrap_or(0);
-            if key.keycode != 0 {
-                events.push(ImEvent::Key {
-                    window,
-                    keycode: u8::try_from(key.keycode).unwrap_or(0),
-                    pressed: kind == KEY_PRESS,
-                });
-            } else if kind == KEY_PRESS
-                && let Some(ic) = contexts(window)
-                && let Some(text) = self.lookup(ic, &mut key)
-            {
-                events.push(ImEvent::Commit { window, text });
-            }
+    /// The input method event of an event that the input method put back:
+    /// a key that it did not use, or the committed text of the key event
+    /// without a key code. `contexts` gives the open context of a window.
+    pub(crate) fn put_back(
+        &self,
+        event: &XlibEvent,
+        contexts: &dyn Fn(u32) -> Option<*mut XicRec>,
+    ) -> Option<ImEvent> {
+        let kind = event.kind();
+        let mut key = event.key()?;
+        let window = u32::try_from(key.window).unwrap_or(0);
+        if key.keycode != 0 {
+            return Some(ImEvent::Key {
+                window,
+                keycode: u8::try_from(key.keycode).unwrap_or(0),
+                pressed: kind == KEY_PRESS,
+            });
         }
-        events
+        if kind != KEY_PRESS {
+            return None;
+        }
+        let ic = contexts(window)?;
+        let text = self.lookup(ic, &mut key)?;
+        Some(ImEvent::Commit { window, text })
     }
 
     /// The committed text of a key event without a key code.
     fn lookup(&self, ic: *mut XicRec, key: &mut XKeyEvent) -> Option<String> {
+        let lib = self.lib();
         let mut buffer = vec![CChar(0); 256];
         loop {
             let mut status: CInt = 0;
@@ -688,7 +720,7 @@ impl XimDisplay {
             // SAFETY: the buffer holds `length` bytes; the key event came
             // from the input method of `ic`, which is alive.
             let count = unsafe {
-                (self.lib.Xutf8LookupString)(
+                (lib.Xutf8LookupString)(
                     ic,
                     key,
                     buffer.as_mut_ptr(),
@@ -714,15 +746,6 @@ impl XimDisplay {
     }
 }
 
-impl Drop for XimDisplay {
-    fn drop(&mut self) {
-        self.unwatch();
-        // SAFETY: this is the only close of the display, after every
-        // input method of it closed, because each holds the display.
-        unsafe { (self.lib.XCloseDisplay)(self.raw) };
-    }
-}
-
 /// The result of an attempt to open an input method.
 pub(crate) enum Opened {
     /// An input method with preedit callbacks.
@@ -743,21 +766,27 @@ struct DestroyWatch {
 
 /// An open input method with preedit callbacks.
 pub(crate) struct InputMethod {
-    display: Rc<XimDisplay>,
+    display: Rc<SharedDisplay>,
     im: *mut XimRec,
     style: CUlong,
-    watch: Box<DestroyWatch>,
+    /// The destroy callback. After a lost connection, the method stays
+    /// open in Xlib, so its callback structure must stay valid: the drop
+    /// then leaks the box.
+    watch: Option<Box<DestroyWatch>>,
 }
 
 impl InputMethod {
     /// Opens the input method of `XMODIFIERS` on `display`.
-    pub(crate) fn open(display: &Rc<XimDisplay>) -> Opened {
-        let lib = display.lib;
+    pub(crate) fn open(display: &Rc<SharedDisplay>) -> Opened {
+        if display.lost() {
+            return Opened::Missing;
+        }
+        let lib = display.lib();
         let im = with_xim_locale(lib, || {
             // SAFETY: the display is open; null takes the defaults.
             unsafe {
                 (lib.XOpenIM)(
-                    display.raw,
+                    display.raw(),
                     std::ptr::null_mut(),
                     std::ptr::null_mut(),
                     std::ptr::null_mut(),
@@ -768,34 +797,32 @@ impl InputMethod {
         if im.is_null() {
             return Opened::Missing;
         }
+        let mut watch = Box::new(DestroyWatch {
+            alive: Cell::new(true),
+            callback: XimDestroyCallback {
+                client_data: std::ptr::null_mut(),
+                callback: Some(destroyed),
+            },
+        });
+        watch.callback.client_data = (&raw const watch.alive).cast_mut().cast();
         let mut method = Self {
             display: Rc::clone(display),
             im,
             style: 0,
-            watch: Box::new(DestroyWatch {
-                alive: Cell::new(true),
-                callback: XimDestroyCallback {
-                    client_data: std::ptr::null_mut(),
-                    callback: Some(destroyed),
-                },
-            }),
+            watch: Some(watch),
         };
-        method.watch.callback.client_data = (&raw const method.watch.alive).cast_mut().cast();
         let Some(style) = method.callback_style() else {
             return Opened::Unusable;
         };
         method.style = style;
+        let Some(callback) = method.watch.as_ref().map(|watch| &raw const watch.callback) else {
+            return Opened::Unusable;
+        };
         // SAFETY: the list names one value and ends with null. The
         // callback structure and its cell live in the box until after the
         // method closes.
-        let failed = unsafe {
-            (lib.XSetIMValues)(
-                method.im,
-                name(XN_DESTROY_CALLBACK),
-                &raw const method.watch.callback,
-                end(),
-            )
-        };
+        let failed =
+            unsafe { (lib.XSetIMValues)(method.im, name(XN_DESTROY_CALLBACK), callback, end()) };
         if !failed.is_null() {
             return Opened::Unusable;
         }
@@ -806,16 +833,12 @@ impl InputMethod {
     /// The input style with preedit callbacks and no status, if the input
     /// method has one.
     fn callback_style(&self) -> Option<CUlong> {
+        let lib = self.display.lib();
         let mut styles: *mut XimStyles = std::ptr::null_mut();
         // SAFETY: the list names one value and ends with null; the result
         // goes to `styles`.
         let failed = unsafe {
-            (self.display.lib.XGetIMValues)(
-                self.im,
-                name(XN_QUERY_INPUT_STYLE),
-                &raw mut styles,
-                end(),
-            )
+            (lib.XGetIMValues)(self.im, name(XN_QUERY_INPUT_STYLE), &raw mut styles, end())
         };
         if !failed.is_null() || styles.is_null() {
             return None;
@@ -835,23 +858,24 @@ impl InputMethod {
             .copied()
             .find(|style| wanted.contains(style));
         // SAFETY: Xlib allocated the list for the caller.
-        unsafe { (self.display.lib.XFree)(styles.cast()) };
+        unsafe { (lib.XFree)(styles.cast()) };
         found
     }
 
-    /// False after the input method stopped. Xlib then destroyed the
-    /// method and its contexts.
+    /// False after the input method stopped, and after the connection is
+    /// lost. Xlib then destroyed the method and its contexts, or a call
+    /// would wait for the XIM server forever.
     pub(crate) fn is_alive(&self) -> bool {
-        self.watch.alive.get()
+        self.watch.as_ref().is_some_and(|watch| watch.alive.get()) && !self.display.lost()
     }
 
-    /// Creates an input context for the xcb window `window`, with the
+    /// Creates an input context for the window `window`, with the
     /// preedit callbacks.
     pub(crate) fn create_context(self: &Rc<Self>, window: u32) -> Option<InputContext> {
         if !self.is_alive() {
             return None;
         }
-        let lib = self.display.lib;
+        let lib = self.display.lib();
         let data = std::ptr::without_provenance_mut::<CChar>(window as usize);
         let callbacks = Box::new(Callbacks {
             start: XicCallback {
@@ -920,13 +944,19 @@ impl InputMethod {
 
 impl Drop for InputMethod {
     fn drop(&mut self) {
-        // After the destroy callback, Xlib already closed the method.
         if self.is_alive() {
             // SAFETY: the input method is open, and every context closed
             // before, because each holds the method.
-            unsafe { (self.display.lib.XCloseIM)(self.im) };
+            unsafe { (self.display.lib().XCloseIM)(self.im) };
             self.display.flush();
+        } else if self.display.lost() {
+            // The method stays open in Xlib, which can still call its
+            // destroy callback with the cell of the box.
+            if let Some(watch) = self.watch.take() {
+                Box::leak(watch);
+            }
         }
+        // Else, after the destroy callback, Xlib already closed the method.
     }
 }
 
@@ -956,7 +986,7 @@ impl InputContext {
         let Some(ic) = self.raw() else {
             return;
         };
-        let lib = self.method.display.lib;
+        let lib = self.method.display.lib();
         if focused {
             // SAFETY: the context is open.
             unsafe { (lib.XSetICFocus)(ic) };
@@ -973,7 +1003,7 @@ impl InputContext {
         let Some(ic) = self.raw() else {
             return;
         };
-        let lib = self.method.display.lib;
+        let lib = self.method.display.lib();
         let point = XPoint { x, y };
         // SAFETY: the list names one value and ends with null; Xlib copies
         // the point when the list is set.
@@ -994,9 +1024,10 @@ impl InputContext {
 impl Drop for InputContext {
     fn drop(&mut self) {
         // After the destroy callback, Xlib already destroyed the context.
+        // After a lost connection, the context stays in Xlib.
         if let Some(ic) = self.raw() {
             // SAFETY: this is the only destruction of the context.
-            unsafe { (self.method.display.lib.XDestroyIC)(ic) };
+            unsafe { (self.method.display.lib().XDestroyIC)(ic) };
             self.method.display.flush();
         }
     }
@@ -1006,7 +1037,9 @@ impl Drop for InputContext {
 #[cfg(test)]
 pub(crate) fn layouts() -> Vec<super::checks::StructItem> {
     vec![
+        XAnyEvent::layout(),
         XKeyEvent::layout(),
+        XGenericEventCookie::layout(),
         XimCallback::layout(),
         XimDestroyCallback::layout(),
         XicCallback::layout(),
