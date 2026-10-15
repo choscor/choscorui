@@ -10,7 +10,7 @@ macOS is the supported platform. The `choscorui-macos` crate is the backend. The
 | Xcode Command Line Tools | A release that supports macOS 15 (`xcode-select --install`) |
 | Rust | 1.88 or later, edition 2024 |
 
-The backend links only system frameworks: AppKit, Foundation, Core Foundation, Core Graphics, Core Text, ImageIO, Metal, Quartz Core, and UserNotifications. [`scripts/macos/package.sh`](../scripts/macos/package.sh) builds a universal archive for Apple silicon and Intel when `CHOSCORUI_UNIVERSAL=1` is set.
+The backend links only system frameworks: AppKit, Foundation, Core Foundation, Core Graphics, Core Text, ImageIO, Metal, Quartz Core, and UserNotifications.
 
 ## Application lifecycle and run loop
 

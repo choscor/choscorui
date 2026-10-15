@@ -27,7 +27,7 @@ Start with the [documentation index](docs/README.md).
 
 ## Install, release, and security
 
-- The demo apps ship as a zip archive with `install.sh` and `uninstall.sh`. `scripts/macos/package.sh` builds the archive, and its [README](scripts/macos/archive-readme.md) gives the install steps.
+- Add ChoscorUI to an application with `cargo add choscorui`. Each release publishes the crates to crates.io.
 - [docs/releasing.md](docs/releasing.md) describes the release procedure. Each GitHub Release contains the release notes.
 - [SECURITY.md](SECURITY.md) describes how to report a vulnerability.
 - [CONTRIBUTING.md](CONTRIBUTING.md) describes the contribution policy and the checks. Report bugs and suggestions in issues.

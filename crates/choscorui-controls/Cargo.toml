@@ -4,6 +4,8 @@ version = "0.1.0"
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
+repository.workspace = true
+description = "Control behavior and paint recipes of ChoscorUI"
 
 [dependencies]
-choscorui-core = { path = "../choscorui-core" }
+choscorui-core = { path = "../choscorui-core", version = "0.1.0" }

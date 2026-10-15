@@ -4,6 +4,8 @@ version = "0.1.0"
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
+repository.workspace = true
+description = "Platform-independent contracts of the ChoscorUI UI tree: layout, text, semantics, themes, and display lists"
 
 [dependencies]
 unicode-segmentation = "1.13.3"

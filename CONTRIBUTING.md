@@ -39,9 +39,10 @@ cargo +1.88 check --workspace --exclude choscorui-windows --exclude choscorui-li
 cargo test --workspace --exclude choscorui-windows --exclude choscorui-linux --locked
 cargo check -p choscorui -p choscorui-gallery --all-targets --locked --target x86_64-pc-windows-gnu
 cargo check -p choscorui -p choscorui-gallery --all-targets --locked --target x86_64-unknown-linux-gnu
+cargo publish --workspace --dry-run --locked
 ```
 
-The last two commands check that the facade and the gallery build on a target without a backend. They only compile, so they need no other SDK.
+The two `--target` commands check that the facade and the gallery build on a target without a backend. They only compile, so they need no other SDK. The dry run checks that the published crates package and build from their own files.
 
 For backend or UI changes, also run the native checks from the CI `native` job.
 

@@ -6,6 +6,7 @@ resolver = "3"
 edition = "2024"
 rust-version = "1.88"
 license = "MIT OR Apache-2.0"
+repository = "https://github.com/choscor/choscorui"
 
 # One codegen unit with whole-program LTO, no symbol table, and size
 # optimization for the view code and the controls keep the release

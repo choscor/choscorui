@@ -1,6 +1,6 @@
 //! Line icons drawn from SVG source: a 24-unit view box, a stroke width of
 //! 2, and round caps and joins. The geometry comes from the Lucide icon set
-//! (ISC license; see `docs/licenses.md`).
+//! (ISC license; see `THIRD-PARTY-NOTICES.txt` in this crate).
 
 use crate::{Color, DisplayList, DisplayListError, Rect, SvgDocument};
 use std::sync::OnceLock;

@@ -1,7 +1,7 @@
 ---
 name: release-new-version
 disable-model-invocation: true
-description: Release ChoscorUI from one verified tag with a signed, notarized macOS universal archive and a GitHub Release whose text is the release notes.
+description: Release ChoscorUI from one verified tag by publishing the crates to crates.io and creating a GitHub Release whose text is the release notes.
 ---
 
 # Release ChoscorUI
@@ -13,18 +13,19 @@ this skill adds the decisions and safeguards around it.
 
 ## Scope and local configuration
 
-Determine the requested version and whether the user wants preparation only, a
-packaged candidate, or the full release. A request to release end to end
-authorizes the release commit, tag push, and GitHub release; carry it through
-without repeatedly requesting the same permission. Preparation alone does not
-authorize tags or a GitHub release. If scope is missing, prepare the notes and
-verified archive before asking for the publication decision.
+Determine the requested version and whether the user wants preparation only or
+the full release. A request to release end to end authorizes the release commit,
+tag push, crates.io publish, and GitHub release; carry it through without
+repeatedly requesting the same permission. Preparation alone does not authorize
+tags, a crates.io publish, or a GitHub release. If scope is missing, prepare the
+notes and pass the checks, including the publish dry run, before asking for the
+publication decision.
 
 Use the checked-out repository and its configured Git remote; never embed a
-maintainer's checkout path, username, email, team ID, signing identity, or
-notary profile in tracked files or notes. Resolve tools through PATH and existing
-local authentication. Credentials stay in Keychain (`notarytool` profile) or
-environment variables, outside Git.
+maintainer's checkout path, username, email, or registry token in tracked files
+or notes. Resolve tools through PATH and existing local authentication. The
+crates.io token stays in Cargo's credential store (`cargo login`) or the
+environment, outside Git; never read or print it.
 
 ## Prepare the version
 
@@ -33,12 +34,14 @@ breaking change bumps `Y`. If no version was given and none is unambiguous, ask.
 Inspect Git status and the remote branch; fetch and check for divergence before
 release mutations. Do not reset, stash, discard, or commit unrelated work.
 
-Inspect local and remote `vX.Y.Z` tags and any existing GitHub release. Treat
-network or authentication failures as errors, not as absence. An existing tag is
+Inspect local and remote `vX.Y.Z` tags, any existing GitHub release, and whether
+crates.io already has `X.Y.Z` of each published crate. Treat network or
+authentication failures as errors, not as absence. An existing tag is
 reusable only when its peeled commit equals the selected source commit. Never
 force-push or move a conflicting tag.
 
-Bump `version` in every `Cargo.toml`, then run `cargo update -w`. Stage only
+Bump `version` in every `Cargo.toml` and in each dependency on a workspace
+crate, then run `cargo update -w`. Stage only
 the intended manifests and the lockfile with explicit paths.
 
 ## Draft the release notes
@@ -60,30 +63,23 @@ diff, with related changes merged. Then add, only when substantiated:
   [controls.md](../../../docs/controls.md).
 - `## Upgrading`: migrations, raised MSRV, or required user actions.
 
-Then paste the generated change list. Finish with `## Download` naming the
-archive, its SHA-256 once verified, and the macOS 15+ requirement. Do not paste
+Then paste the generated change list. Finish with `## Install`: the
+`cargo add choscorui@X.Y.Z` command, the macOS 15+ requirement, and the MSRV. Do not paste
 raw commit bodies, private issues, local paths, or placeholder bullets. Show the
 draft to the user while the checks run and incorporate their edits.
 
-## Verify and package
+## Verify
 
 Run every check in the "Automated checks" section of releasing.md on the release machine,
-including the native smoke tests one at a time and the bench budget check on the
-reference machine. Resolve failures before packaging; do not weaken checks, add
-retries, or raise timeouts as the only fix. For an authorized full release,
-commit the version bump as `chore(release): X.Y.Z` so packaging captures a clean
-commit.
+including the native smoke tests one at a time, the publish dry run, and the
+bench budget check on the reference machine. Resolve failures before publishing;
+do not weaken checks, add retries, or raise timeouts as the only fix. For an
+authorized full release, commit the version bump as `chore(release): X.Y.Z` and
+run the dry run again on that clean commit.
 
-Build, sign, notarize, staple, and check the archive as in the "Signed and
-notarized archive" section of releasing.md, with `CHOSCORUI_UNIVERSAL=1`, the
-Developer ID identity, and the notary profile from the local environment. Never bypass signing or notarization. Run
-`scripts/macos/install-check.sh` on the result.
-
-The public attachments are exactly `choscorui-X.Y.Z-macos-universal.zip` and its
-`.sha256`. Do not upload `dist/` recursively or with a wildcard. Inspect the
-archive and notes for credentials, personal paths, and copied maintainer
-configuration; if one is found, fix the source and rebuild rather than editing
-the signed archive.
+Inspect `cargo package --workspace --list` and the notes for credentials,
+personal paths, and copied maintainer configuration; if one is found, fix the
+source before publishing.
 
 ## Tag and publish
 
@@ -95,15 +91,19 @@ git tag -s "v$VERSION" "$RELEASE_COMMIT" -m "choscorui $VERSION"
 git push "$REMOTE" "refs/tags/v$VERSION:refs/tags/v$VERSION"
 ```
 
-Verify the remote tag's peeled commit, then create the GitHub release with `gh`
-from the reviewed notes file and the two explicit attachment paths. Recheck the
-notes' version and date first. Never use `--clobber` or replace published
-assets; a faulty shipped version is fixed with a higher version.
+Verify the remote tag's peeled commit, then run `cargo publish --workspace --locked`
+from the clean release commit. A crates.io version is permanent: it can be
+yanked but never replaced, so a faulty shipped version is fixed with a higher
+version. If the publish stops partway, publish only the missing crates from the
+same commit; do not bump or retag.
+
+Then create the GitHub release with `gh` from the reviewed notes file, with no
+attachments. Recheck the notes' version and date first.
 
 ## Report
 
 Report the version and exact source commit, automated checks and their outcomes,
-the archive SHA-256, the tag push result, and the GitHub release link or draft
-status. Distinguish completed steps from pending ones. Never report real input
+the tag push result, the published crates.io versions, and the GitHub release
+link or draft status. Distinguish completed steps from pending ones. Never report real input
 methods, VoiceOver, a notarized clean-machine install, Intel hardware, or budgets
 on other hardware as verified from automated evidence.

@@ -4,6 +4,12 @@ version = "0.1.0"
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
+repository.workspace = true
+description = "AppKit backend of ChoscorUI. Its API is an implementation detail of the choscorui facade"
+
+[package.metadata.docs.rs]
+default-target = "aarch64-apple-darwin"
+targets = ["aarch64-apple-darwin", "x86_64-apple-darwin"]
 
 [lints.rust]
 unsafe_code = "deny"
@@ -15,7 +21,7 @@ multiple_unsafe_ops_per_block = "deny"
 missing_safety_doc = "deny"
 
 [dependencies]
-choscorui-core = { path = "../choscorui-core" }
+choscorui-core = { path = "../choscorui-core", version = "0.1.0" }
 
 [[test]]
 name = "window_smoke"

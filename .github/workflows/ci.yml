@@ -46,6 +46,10 @@ jobs:
         run: |
           cargo check -p choscorui -p choscorui-gallery --all-targets --locked --target x86_64-pc-windows-gnu
           cargo check -p choscorui -p choscorui-gallery --all-targets --locked --target x86_64-unknown-linux-gnu
+      # The published crates package and build from their own sources.
+      - name: Crate packages
+        if: matrix.os == 'macos-15'
+        run: cargo publish --workspace --dry-run --locked
 
   native:
     name: native macOS app (${{ matrix.os }})
@@ -77,22 +81,3 @@ jobs:
         run: CHOSCORUI_GALLERY_AUTOCLOSE_MS=1000 cargo run -p choscorui-gallery --locked
       - name: Gallery autopilot
         run: CHOSCORUI_GALLERY_SETTINGS="$RUNNER_TEMP/gallery.txt" CHOSCORUI_GALLERY_AUTOPILOT=1 cargo run -p choscorui-gallery --locked
-
-  package:
-    name: package and install check
-    needs: native
-    runs-on: macos-15
-    steps:
-      - uses: actions/checkout@v7
-      - name: Targets
-        run: rustup target add aarch64-apple-darwin x86_64-apple-darwin
-      - name: Universal archive (ad-hoc signed)
-        run: CHOSCORUI_UNIVERSAL=1 scripts/macos/package.sh
-      - name: Install, run core scenarios, uninstall
-        run: scripts/macos/install-check.sh dist/choscorui-*-macos-universal.zip
-      - uses: actions/upload-artifact@v7
-        with:
-          name: choscorui-macos-universal
-          path: |
-            dist/*.zip
-            dist/*.sha256
