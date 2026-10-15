@@ -1,11 +1,13 @@
 //! An X11 window: its properties, its image, and its geometry.
 //!
-//! The window paints into a client-side image and copies the damaged
-//! region to the server, through MIT-SHM when the server shares memory
-//! with the client and with `PutImage` otherwise. A shared image stays
-//! busy until its completion event. The image is a Z pixmap of the root
-//! depth: 32 bits per pixel in BGRX order, which is the layout of the
-//! paint buffer on little-endian machines.
+//! With the GLES painter, the window paints through an EGL surface on
+//! the connection of the GLES device. With Cairo, it paints into a
+//! client-side image and copies the damaged region to the server,
+//! through MIT-SHM when the server shares memory with the client and
+//! with `PutImage` otherwise. A shared image stays busy until its
+//! completion event. The image is a Z pixmap of the root depth: 32 bits
+//! per pixel in BGRX order, which is the layout of the paint buffer on
+//! little-endian machines.
 
 use super::Client;
 use super::protocol::{self, MOVERESIZE_MOVE};
@@ -25,8 +27,9 @@ use crate::ffi::x11::{
     XCB_INPUT_XI_EVENT_MASK_BUTTON_RELEASE, XCB_INPUT_XI_EVENT_MASK_DEVICE_CHANGED,
     XCB_INPUT_XI_EVENT_MASK_ENTER, XCB_INPUT_XI_EVENT_MASK_LEAVE, XCB_INPUT_XI_EVENT_MASK_MOTION,
 };
+use crate::gles::{self, GlesError, GlesWindow};
 use crate::native::paint::{self, Pixels};
-use crate::native::types::{Error, ResizeEdge, WindowEvent};
+use crate::native::types::{Error, Painter, ResizeEdge, WindowEvent};
 use crate::native::window::{Surface, WindowShared};
 use choscorui_core::{CursorShape, Point, Rect, Size, WindowGeometry};
 use std::cell::RefCell;
@@ -84,6 +87,8 @@ pub(crate) struct X11Surface {
     pub(crate) id: u32,
     gc: u32,
     state: RefCell<State>,
+    /// The EGL surface of the GLES painter, from the first GLES paint.
+    gles: RefCell<Option<GlesWindow>>,
 }
 
 /// The pixel size of a logical size, within the 16 bits of X.
@@ -229,6 +234,7 @@ impl X11Surface {
                 occluded: false,
                 destroyed: false,
             }),
+            gles: RefCell::new(None),
         });
         surface.set_properties(client, app_id);
         client.make_aware(id);
@@ -325,21 +331,87 @@ impl X11Surface {
         );
     }
 
-    /// Paints the pending region and copies it to the server, unless
-    /// the window is unmapped or its shared image is busy.
+    /// Paints the pending region and shows it, unless the window is
+    /// unmapped or its shared image is busy.
     pub(crate) fn paint_if_ready(&self, client: &Client) {
         if self.shared.closed.get() {
             return;
         }
+        // A GPU failure in another window switches this one at its next
+        // paint.
+        let device = match self.shared.paint.borrow().painter {
+            Painter::Gles => client.gles(),
+            Painter::Cairo => None,
+        };
+        if device.is_none() && self.shared.paint.borrow().painter == Painter::Gles {
+            self.use_cairo();
+        }
         {
             let state = self.state.borrow();
-            if state.destroyed || !state.mapped || state.busy {
+            if state.destroyed || !state.mapped || (device.is_none() && state.busy) {
                 return;
             }
         }
         let Some(region) = self.shared.take_pending() else {
             return;
         };
+        match device {
+            Some(device) => self.paint_gles(&device, region),
+            None => self.paint_cairo(client, region),
+        }
+    }
+
+    /// Switches the window to Cairo for the rest of its life, and asks
+    /// for a full repaint.
+    fn use_cairo(&self) {
+        self.gles.borrow_mut().take();
+        self.shared.paint.borrow_mut().painter = Painter::Cairo;
+        self.shared.invalidate();
+    }
+
+    /// Paints with GLES through the EGL surface of the window, which the
+    /// first paint opens.
+    fn paint_gles(&self, device: &gles::Device, region: Rect) {
+        let start = Instant::now();
+        let pixels = self.state.borrow().pixels;
+        let bounds = self.shared.bounds();
+        let region = region.intersection(bounds).unwrap_or(bounds);
+        let list = Rc::clone(&self.shared.paint.borrow().list);
+        let mut slot = self.gles.borrow_mut();
+        if slot.is_none() {
+            match device.x11_window(self.id, pixels.0, pixels.1) {
+                Ok(window) => *slot = Some(window),
+                Err(error) => {
+                    drop(slot);
+                    gles::mark_failed(&error);
+                    self.use_cairo();
+                    return;
+                }
+            }
+        }
+        let Some(window) = slot.as_mut() else {
+            return;
+        };
+        let scale = self.shared.scale.get();
+        let result = device.paint_window(window, &list, scale, pixels, region, || {});
+        drop(slot);
+        match result {
+            Ok(()) => {}
+            Err(GlesError::TextUnavailable) => {
+                eprintln!("choscorui: painting failed: {}", GlesError::TextUnavailable);
+            }
+            Err(_) => {
+                self.use_cairo();
+                return;
+            }
+        }
+        self.shared.visible.set(true);
+        self.shared.painted(start);
+    }
+
+    /// Paints with Cairo into the client-side image, and copies the
+    /// region to the server.
+    fn paint_cairo(&self, client: &Client, region: Rect) {
         let start = Instant::now();
         let scale = self.shared.scale.get();
         let mut state = self.state.borrow_mut();
@@ -769,6 +841,8 @@ impl Surface for X11Surface {
             state.mapped = false;
             state.image.take()
         };
+        // EGL lets go of the window before it is destroyed.
+        self.gles.borrow_mut().take();
         let connection = &client.connection;
         if let Some(Image {
             memory: Memory::Shared { id, .. },

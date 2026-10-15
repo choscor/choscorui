@@ -178,8 +178,7 @@ impl Display {
     fn painter(&self) -> Painter {
         let gles = match self {
             Self::Wayland(client) => client.gles().is_some(),
-            // The X11 windows paint with Cairo.
-            Self::X11(_) => false,
+            Self::X11(client) => client.gles().is_some(),
         };
         if gles { Painter::Gles } else { Painter::Cairo }
     }

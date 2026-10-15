@@ -45,8 +45,12 @@ native() {
             smoke "$backend" "$painter"
         done
     done
-    # GLES paints like the software renderer, and text like Cairo.
-    CHOSCORUI_RUN_LINUX_SMOKE=1 $session cargo test -p choscorui --test gles_parity_smoke --locked
+    # GLES paints like the software renderer, and text like Cairo, on
+    # both display servers.
+    for backend in wayland x11; do
+        CHOSCORUI_BACKEND=$backend CHOSCORUI_RUN_LINUX_SMOKE=1 \
+            $session cargo test -p choscorui --test gles_parity_smoke --locked
+    done
     # Without a display server, the app reports Unsupported.
     env -u WAYLAND_DISPLAY -u DISPLAY CHOSCORUI_BACKEND=x11 \
         cargo test -p choscorui --test errors_and_capabilities --locked

@@ -1,20 +1,28 @@
 //! A safe interface to libEGL and libwayland-egl, for the GLES painter.
 //!
-//! - `EglDisplay` opens an EGL display on a Wayland connection, or on no
-//!   window system with `EGL_MESA_platform_surfaceless`. It terminates
-//!   the display when the last context and surface are gone.
+//! - `EglDisplay` opens an EGL display on a Wayland connection, on an X
+//!   server, or on no window system with `EGL_MESA_platform_surfaceless`.
+//!   It terminates the display when the last context and surface are
+//!   gone.
+//! - On X11 the display has a connection of its own: an xcb connection
+//!   with `EGL_EXT_platform_xcb`, else an Xlib connection with
+//!   `EGL_KHR_platform_x11`. Thus the requests and the errors of EGL stay
+//!   out of the event loop of the backend.
 //! - `EglContext` is an OpenGL ES 3.0 context and its config.
 //! - `EglSurface` is a window surface on a `wl_egl_window` of a
-//!   `wl_surface`. It holds the surface proxy, so the proxy outlives it.
+//!   `wl_surface`, or on an X11 window. It holds the surface proxy, so the
+//!   proxy outlives it.
 //!
 //! Each object holds what it uses, so the drop order is always the order
 //! that EGL needs: surfaces and contexts before the display, and the
-//! display before the Wayland connection.
+//! display before its native connection.
 
-use super::ctypes::{CChar, CInt, c_void};
+use super::ctypes::{CChar, CInt, CUlong, c_void};
 use super::dl::LoadError;
 use super::macros::{c_consts, libraries, lookup_functions, opaque_types};
 use super::wayland::{Connection, DisplayRef, Proxy};
+use super::x11::Connection as XcbConnection;
+use super::xlib::XlibDisplay;
 use std::ffi::CStr;
 use std::rc::Rc;
 
@@ -83,6 +91,12 @@ libraries! {
                 attrib_list: *const EglInt,
             ) -> Handle;
             fn eglDestroyContext(dpy: Handle, ctx: Handle) -> EglBoolean;
+            fn eglGetConfigAttrib(
+                dpy: Handle,
+                config: Handle,
+                attribute: EglInt,
+                value: *mut EglInt,
+            ) -> EglBoolean;
             fn eglCreatePlatformWindowSurface(
                 dpy: Handle,
                 config: Handle,
@@ -155,6 +169,7 @@ c_consts! {
     const EGL_BLUE_SIZE: EglInt = 0x3022;
     const EGL_GREEN_SIZE: EglInt = 0x3023;
     const EGL_RED_SIZE: EglInt = 0x3024;
+    const EGL_NATIVE_VISUAL_ID: EglInt = 0x302E;
     const EGL_SURFACE_TYPE: EglInt = 0x3033;
     const EGL_NONE: EglInt = 0x3038;
     const EGL_RENDERABLE_TYPE: EglInt = 0x3040;
@@ -166,6 +181,10 @@ c_consts! {
     const EGL_WINDOW_BIT: EglInt = 0x0004;
     const EGL_OPENGL_ES3_BIT: EglInt = 0x0040;
     const EGL_BUFFER_AGE_EXT: EglInt = 0x313D;
+    const EGL_PLATFORM_X11_KHR: EglEnum = 0x31D5;
+    const EGL_PLATFORM_X11_SCREEN_KHR: EglInt = 0x31D6;
+    const EGL_PLATFORM_XCB_EXT: EglEnum = 0x31DC;
+    const EGL_PLATFORM_XCB_SCREEN_EXT: EglInt = 0x31DE;
     const EGL_PLATFORM_WAYLAND_KHR: EglEnum = 0x31D8;
     const EGL_PLATFORM_SURFACELESS_MESA: EglEnum = 0x31DD;
 }
@@ -213,16 +232,32 @@ impl std::fmt::Display for EglFailure {
     }
 }
 
+/// The native connection of a display, which must outlive it.
+enum Native {
+    /// No window system.
+    None,
+    Wayland {
+        _display: DisplayRef,
+    },
+    /// The xcb connection of `EGL_PLATFORM_XCB_EXT`.
+    Xcb {
+        _connection: XcbConnection,
+    },
+    /// The Xlib connection of `EGL_PLATFORM_X11_KHR`.
+    Xlib {
+        _display: XlibDisplay,
+    },
+}
+
 /// An initialized display. Dropping it releases the current context and
-/// terminates the display.
+/// terminates the display, then closes the native connection.
 struct DisplayInner {
     lib: &'static Egl,
     raw: Handle,
     extensions: String,
     swap_with_damage:
         Option<unsafe extern "C" fn(Handle, Handle, *const EglInt, EglInt) -> EglBoolean>,
-    /// The Wayland connection, which must outlive the display.
-    _native: Option<DisplayRef>,
+    native: Native,
 }
 
 impl DisplayInner {
@@ -270,7 +305,47 @@ impl EglDisplay {
     pub(crate) fn wayland(connection: &Connection) -> Result<Self, EglFailure> {
         let native = connection.display_ref();
         let pointer = native.raw().cast::<c_void>();
-        Self::open(EGL_PLATFORM_WAYLAND_KHR, pointer, Some(native))
+        Self::open(
+            EGL_PLATFORM_WAYLAND_KHR,
+            pointer,
+            &[],
+            Native::Wayland { _display: native },
+        )
+    }
+
+    /// Opens an EGL display on a new connection to the X server of
+    /// `DISPLAY`: through xcb with `EGL_EXT_platform_xcb`, else through
+    /// Xlib with `EGL_KHR_platform_x11`.
+    pub(crate) fn x11() -> Result<Self, EglFailure> {
+        let lib = Egl::get().map_err(EglFailure::Library)?;
+        let client = query_string(lib, NONE, EGL_EXTENSIONS);
+        if has_name(&client, "EGL_EXT_platform_xcb")
+            && let Ok(connection) = XcbConnection::connect()
+        {
+            let pointer = connection.raw().cast::<c_void>();
+            let screen = attribute(connection.screen_number());
+            let attributes = [attribute(EGL_PLATFORM_XCB_SCREEN_EXT), screen];
+            let native = Native::Xcb {
+                _connection: connection,
+            };
+            if let Ok(display) = Self::open(EGL_PLATFORM_XCB_EXT, pointer, &attributes, native) {
+                return Ok(display);
+            }
+        }
+        if !has_name(&client, "EGL_KHR_platform_x11") && !has_name(&client, "EGL_EXT_platform_x11")
+        {
+            return Err(EglFailure::Display(0));
+        }
+        let display = XlibDisplay::open().ok_or(EglFailure::Display(0))?;
+        let pointer = display.raw().cast::<c_void>();
+        let screen = attribute(display.default_screen());
+        let attributes = [attribute(EGL_PLATFORM_X11_SCREEN_KHR), screen];
+        Self::open(
+            EGL_PLATFORM_X11_KHR,
+            pointer,
+            &attributes,
+            Native::Xlib { _display: display },
+        )
     }
 
     /// Opens an EGL display without a window system, for offscreen
@@ -283,18 +358,23 @@ impl EglDisplay {
         ) {
             return Err(EglFailure::Display(0));
         }
-        Self::open(EGL_PLATFORM_SURFACELESS_MESA, NONE, None)
+        Self::open(EGL_PLATFORM_SURFACELESS_MESA, NONE, &[], Native::None)
     }
 
+    /// Opens the display of `platform` on `pointer`, the native display
+    /// that `keep` holds open, with the attribute pairs of `attributes`.
     fn open(
         platform: EglEnum,
-        native: *mut c_void,
-        keep: Option<DisplayRef>,
+        pointer: *mut c_void,
+        attributes: &[EglAttrib],
+        keep: Native,
     ) -> Result<Self, EglFailure> {
         let lib = Egl::get().map_err(EglFailure::Library)?;
-        // SAFETY: `native` is null or the live `wl_display` that `keep`
-        // holds open; the attribute list is null.
-        let raw = unsafe { (lib.eglGetPlatformDisplay)(platform, native, std::ptr::null()) };
+        let mut list = attributes.to_vec();
+        list.push(attribute(EGL_NONE));
+        // SAFETY: `pointer` is null or the live native display that `keep`
+        // holds open; the attribute list ends with EGL_NONE.
+        let raw = unsafe { (lib.eglGetPlatformDisplay)(platform, pointer, list.as_ptr()) };
         if raw.is_null() {
             // SAFETY: as in `DisplayInner::error`.
             return Err(EglFailure::Display(unsafe { (lib.eglGetError)() }));
@@ -328,7 +408,7 @@ impl EglDisplay {
             raw,
             extensions,
             swap_with_damage,
-            _native: keep,
+            native: keep,
         })))
     }
 
@@ -340,6 +420,17 @@ impl EglDisplay {
     /// Opens an OpenGL ES 3.0 context with an RGBA8 config. `window`
     /// asks for a config that window surfaces can use.
     pub(crate) fn context(&self, window: bool) -> Result<EglContext, EglFailure> {
+        self.context_with(window, None)
+    }
+
+    /// Opens an OpenGL ES 3.0 context for X11 windows of `visual`, with a
+    /// config of 8-bit color whose native visual is `visual`. The alpha
+    /// channel then follows the depth of the visual.
+    pub(crate) fn x11_context(&self, visual: u32) -> Result<EglContext, EglFailure> {
+        self.context_with(true, Some(visual))
+    }
+
+    fn context_with(&self, window: bool, visual: Option<u32>) -> Result<EglContext, EglFailure> {
         let display = &self.0;
         let lib = display.lib;
         // SAFETY: binding the API sets thread state only.
@@ -363,23 +454,39 @@ impl EglDisplay {
             EGL_BLUE_SIZE,
             8,
             EGL_ALPHA_SIZE,
-            8,
+            if visual.is_some() { 0 } else { 8 },
             EGL_NONE,
         ];
-        let mut config = NONE;
+        let mut configs = [NONE; 64];
         let mut count = 0;
-        // SAFETY: the attribute list ends with EGL_NONE; room for one
-        // config and the count are locals.
+        // SAFETY: the attribute list ends with EGL_NONE; `configs` has room
+        // for the count that the call gets.
         let chosen = unsafe {
             (lib.eglChooseConfig)(
                 display.raw,
                 attributes.as_ptr(),
-                &raw mut config,
-                1,
+                configs.as_mut_ptr(),
+                EglInt::try_from(configs.len()).unwrap_or(1),
                 &raw mut count,
             )
         };
-        if chosen == EGL_FALSE || count < 1 || config.is_null() {
+        let count = usize::try_from(count).unwrap_or(0).min(configs.len());
+        if chosen == EGL_FALSE || count < 1 {
+            return Err(EglFailure::NoConfig);
+        }
+        let configs = &configs[..count];
+        let config = match visual {
+            None => configs[0],
+            Some(visual) => configs
+                .iter()
+                .copied()
+                .find(|&config| {
+                    let id = self.config_attribute(config, EGL_NATIVE_VISUAL_ID);
+                    id.and_then(|id| u32::try_from(id).ok()) == Some(visual)
+                })
+                .ok_or(EglFailure::NoConfig)?,
+        };
+        if config.is_null() {
             return Err(EglFailure::NoConfig);
         }
         let attributes = [
@@ -400,6 +507,18 @@ impl EglDisplay {
             config,
             raw,
         })
+    }
+
+    /// The value of `attribute` of `config`.
+    fn config_attribute(&self, config: Handle, attribute: EglInt) -> Option<EglInt> {
+        let display = &self.0;
+        let mut value = 0;
+        // SAFETY: `config` came from this display; the out pointer is a
+        // local.
+        let read = unsafe {
+            (display.lib.eglGetConfigAttrib)(display.raw, config, attribute, &raw mut value)
+        };
+        (read != EGL_FALSE).then_some(value)
     }
 }
 
@@ -460,11 +579,12 @@ impl Drop for WlEglWindow {
     }
 }
 
-/// An EGL window surface on a `wl_surface`.
+/// An EGL window surface on a `wl_surface` or an X11 window.
 pub(crate) struct EglSurface {
     display: Rc<DisplayInner>,
     raw: Handle,
-    window: WlEglWindow,
+    /// The `wl_egl_window` on Wayland. X11 windows need no such object.
+    window: Option<WlEglWindow>,
 }
 
 impl Drop for EglSurface {
@@ -514,22 +634,53 @@ impl EglSurface {
         Ok(Self {
             display: Rc::clone(display),
             raw,
-            window,
+            window: Some(window),
         })
     }
 
-    /// Resizes the window. The next frame has the new size.
-    pub(crate) fn resize(&self, width: u32, height: u32) {
-        // SAFETY: the window is live.
-        unsafe {
-            (self.window.lib.wl_egl_window_resize)(
-                self.window.raw,
-                size(width),
-                size(height),
-                0,
-                0,
-            );
+    /// Opens a window surface on the X11 window `window`, which the server
+    /// already knows. The display of `context` came from
+    /// `EglDisplay::x11`.
+    pub(crate) fn x11(context: &EglContext, window: u32) -> Result<Self, EglFailure> {
+        let display = &context.display;
+        // The XCB platform takes an `xcb_window_t`, and the Xlib platform
+        // a `Window`.
+        let mut xcb_window = window;
+        let mut xlib_window = CUlong::from(window);
+        let pointer = match display.native {
+            Native::Xcb { .. } => (&raw mut xcb_window).cast::<c_void>(),
+            Native::Xlib { .. } => (&raw mut xlib_window).cast::<c_void>(),
+            Native::None | Native::Wayland { .. } => return Err(EglFailure::Surface(0)),
+        };
+        // SAFETY: the config came from this display, and `pointer` points
+        // to the window id that the platform of the display takes; EGL
+        // reads it during the call. The attribute list is null.
+        let raw = unsafe {
+            (display.lib.eglCreatePlatformWindowSurface)(
+                display.raw,
+                context.config,
+                pointer,
+                std::ptr::null(),
+            )
+        };
+        if raw.is_null() {
+            return Err(EglFailure::Surface(display.error()));
         }
+        Ok(Self {
+            display: Rc::clone(display),
+            raw,
+            window: None,
+        })
+    }
+
+    /// Resizes the window. The next frame has the new size. EGL reads
+    /// the size of an X11 window itself.
+    pub(crate) fn resize(&self, width: u32, height: u32) {
+        let Some(window) = &self.window else {
+            return;
+        };
+        // SAFETY: the window is live.
+        unsafe { (window.lib.wl_egl_window_resize)(window.raw, size(width), size(height), 0, 0) };
     }
 
     /// The age of the back buffer with `EGL_EXT_buffer_age`: 0 for
@@ -575,6 +726,11 @@ impl EglSurface {
         }
         Ok(())
     }
+}
+
+/// An `EGLint` value as an `EGLAttrib`, which is at least as wide.
+fn attribute(value: EglInt) -> EglAttrib {
+    EglAttrib::try_from(value).unwrap_or(0)
 }
 
 /// A pixel size as a C int, at least 1.

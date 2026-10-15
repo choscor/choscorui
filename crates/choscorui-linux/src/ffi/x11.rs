@@ -943,6 +943,8 @@ fn take_event(event: *mut XcbGenericEvent) -> Option<Bytes> {
 pub(crate) struct Connection {
     xcb: &'static Xcb,
     raw: *mut XcbConnection,
+    /// The number of the screen of `DISPLAY`.
+    number: CInt,
     screen: XcbScreen,
     /// The screen in the setup data, for xcb-cursor.
     screen_pointer: *mut XcbScreen,
@@ -984,6 +986,7 @@ impl Connection {
         Ok(Self {
             xcb,
             raw,
+            number,
             screen,
             screen_pointer,
         })
@@ -1010,6 +1013,15 @@ impl Connection {
 
     pub(crate) fn screen(&self) -> &XcbScreen {
         &self.screen
+    }
+
+    pub(in crate::ffi) fn raw(&self) -> *mut XcbConnection {
+        self.raw
+    }
+
+    /// The number of the screen, for the screen attribute of EGL.
+    pub(in crate::ffi) fn screen_number(&self) -> CInt {
+        self.number
     }
 
     pub(crate) fn root(&self) -> u32 {

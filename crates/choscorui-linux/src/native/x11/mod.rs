@@ -33,6 +33,7 @@ use crate::ffi::x11::{
     XCB_NOTIFY_DETAIL_POINTER, XCB_PROPERTY_NOTIFY, XCB_SHM_COMPLETION, XCB_UNMAP_NOTIFY,
     XCB_VISIBILITY_FULLY_OBSCURED, XCB_VISIBILITY_NOTIFY, XCB_XKB_STATE_NOTIFY,
 };
+use crate::gles;
 use crate::{InputEvent, LinuxInput};
 use choscorui_core::{
     CursorShape, Image, Point, PointerDetails, PointerEvent, Rect, Size, WheelUnit,
@@ -172,6 +173,9 @@ pub(crate) struct Client {
     time: Cell<u32>,
     /// The XIM input method, when one takes preedit callbacks.
     ime: RefCell<Option<ime::Ime>>,
+    /// The GLES painter, unless it is not available or
+    /// `CHOSCORUI_PAINTER=cairo` asks for Cairo.
+    gles: Option<Rc<gles::Device>>,
 }
 
 /// The X pointer of the virtual core pointer, before any XInput event.
@@ -266,6 +270,13 @@ impl Client {
         let mut input = LinuxInput::new();
         input.update_seat(true, true, false);
         connection.flush();
+        // Shaders compile now, so a driver failure shows before a window
+        // opens. Without the GLES painter, windows use Cairo.
+        let gles = if gles::cairo_requested() {
+            None
+        } else {
+            gles::Device::x11(connection.screen().root_visual).ok()
+        };
         Ok(Rc::new(Self {
             connection,
             atoms,
@@ -302,7 +313,17 @@ impl Client {
             deferred: RefCell::new(VecDeque::new()),
             time: Cell::new(0),
             ime: RefCell::new(ime::Ime::open()),
+            gles,
         }))
+    }
+
+    /// The GLES painter, unless it is not available or a GPU failure
+    /// switched the process to Cairo.
+    pub(crate) fn gles(&self) -> Option<Rc<gles::Device>> {
+        if gles::failed() {
+            return None;
+        }
+        self.gles.clone()
     }
 
     pub(crate) fn create_window(

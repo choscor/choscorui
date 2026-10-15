@@ -80,7 +80,7 @@ On Linux, `Application::new` connects to the X server of `DISPLAY` when the sele
 - **Windows.** Each window has `WM_DELETE_WINDOW`, `_NET_WM_NAME`, `WM_NAME`, `WM_CLASS` from the application id, and `_NET_WM_PID`. `WM_NORMAL_HINTS` holds the minimum size and north-west gravity. The window manager draws the frame, so `has_server_decorations` is true.
 - **Events.** `WM_DELETE_WINDOW` gives `Closing`. `ConfigureNotify` gives `Resized`, and the first `MapNotify` gives `Resized` and activates the window. Focus events give `Focused`, and `VisibilityNotify` gives `Occluded`.
 - **Scale.** The scale is `Xft.dpi` over 96, from `RESOURCE_MANAGER` on the root window. A change of the property gives `ScaleChanged` and `Resized`, and the window keeps its logical size.
-- **Painting.** The window paints into a client-side image and sends only the pending region. It uses MIT-SHM when the server shares memory with the client. A shared image stays busy until its completion event. Otherwise `PutImage` sends the pixels in parts that fit the maximum request length.
+- **Painting.** With the GLES painter, the window paints through EGL, as [Painters](#painters) tells. With Cairo, the window paints into a client-side image and sends only the pending region. It uses MIT-SHM when the server shares memory with the client. A shared image stays busy until its completion event. Otherwise `PutImage` sends the pixels in parts that fit the maximum request length.
 - **Keyboard.** xkbcommon-x11 reads the keymap and the state of the core keyboard. XKB state events update the modifiers. With detectable auto-repeat, a held key arrives as repeated presses, and the keyboard does not repeat keys itself.
 - **Pointer.** XInput 2.2 gives the pointer events of the master devices. A scroll valuator gives `WheelUnit::Points`: one increment is 15 points. The wheel buttons 4 to 7 give `WheelUnit::Lines` when the server does not emulate them from a valuator. Without XInput 2.2, core events give the same events.
 - **Geometry.** `geometry` reads the position with `TranslateCoordinates`, removes `_NET_FRAME_EXTENTS`, and reads `_NET_WM_STATE`. `set_geometry` configures the window. Before the window shows, it writes `_NET_WM_STATE`. After that, it sends client messages to the window manager.
@@ -399,13 +399,14 @@ On Linux, `decode_image(bytes)` gives straight-alpha sRGB RGBA8 pixels, as the m
 
 A window paints with one of two painters, and `Window::painter()` tells which:
 
-- `Painter::Gles` paints with OpenGL ES 3.0 through EGL on a `wl_egl_window`.
-- `Painter::Cairo` paints with Cairo into double-buffered `wl_shm` buffers.
+- `Painter::Gles` paints with OpenGL ES 3.0 through EGL, on a `wl_egl_window` or on the X11 window.
+- `Painter::Cairo` paints with Cairo into double-buffered `wl_shm` buffers, or into an MIT-SHM image or `PutImage` requests on X11.
 
 ### Fallback
 
 - New windows use GLES. They use Cairo when `CHOSCORUI_PAINTER=cairo` is set, or when libEGL, libGLESv2, or libwayland-egl does not load.
-- New windows also use Cairo when no EGL config has RGBA8 and OpenGL ES 3.0, or when the shaders do not compile.
+- On X11, the EGL display uses `EGL_EXT_platform_xcb` when EGL has it, else `EGL_KHR_platform_x11` with libX11. Without both, new windows use Cairo.
+- New windows also use Cairo when no EGL config has RGBA8 and OpenGL ES 3.0, or when the shaders do not compile. On X11, the config must also have the visual of the root window.
 - The shaders compile when the application connects, before a window opens. A compile or link failure is a `GlesError`, not a panic.
 - A GPU failure during a paint switches that window to Cairo for the rest of its life. The window then repaints all of its content.
 - A lost context, a failed swap, and an OpenGL ES error during a paint are GPU failures. The other GLES windows switch to Cairo at their next paint.
@@ -415,10 +416,10 @@ A window paints with one of two painters, and `Window::painter()` tells which:
 
 ### GLES frames
 
-- The swap interval is 0. The `wl_surface.frame` callback and `FrameScheduler` pace the paints, as they do for Cairo.
-- The window sends the viewport, the window geometry, and the frame request before the swap. The swap attaches the buffer and commits the surface.
+- The swap interval is 0. On Wayland, the `wl_surface.frame` callback and `FrameScheduler` pace the paints, as they do for Cairo. On X11, a window paints when its content changes or an `Expose` event arrives.
+- On Wayland, the window sends the viewport, the window geometry, and the frame request before the swap. The swap attaches the buffer and commits the surface.
 - With `EGL_EXT_buffer_age`, a paint repaints the damage of each frame since the back buffer was on the screen. Without it, a paint repaints the whole window.
-- With `EGL_KHR_swap_buffers_with_damage` or `EGL_EXT_swap_buffers_with_damage`, the swap gives the damage to the compositor.
+- With `EGL_KHR_swap_buffers_with_damage` or `EGL_EXT_swap_buffers_with_damage`, the swap gives the damage to the display server.
 
 ### GLES drawing
 
