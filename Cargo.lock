@@ -59,6 +59,9 @@ dependencies = [
 [[package]]
 name = "choscorui-linux"
 version = "0.1.0"
+dependencies = [
+ "choscorui-core",
+]
 
 [[package]]
 name = "choscorui-macos"
