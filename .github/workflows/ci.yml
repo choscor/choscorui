@@ -110,5 +110,5 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v7
-      - name: Smoke tests, gallery, and autopilot on Wayland and X11
+      - name: Smoke tests, gallery, autopilot, and bench budgets on Wayland and X11
         run: scripts/linux/run-in-container.sh native

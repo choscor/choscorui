@@ -6,8 +6,13 @@ rust-version.workspace = true
 license.workspace = true
 publish = false
 
-[target.'cfg(target_os = "macos")'.dependencies]
+[target.'cfg(any(target_os = "macos", target_os = "linux"))'.dependencies]
 choscorui-compose = { path = "../../crates/choscorui-compose" }
 choscorui-core = { path = "../../crates/choscorui-core" }
 choscorui-controls = { path = "../../crates/choscorui-controls" }
+
+[target.'cfg(target_os = "macos")'.dependencies]
 choscorui-macos = { path = "../../crates/choscorui-macos" }
+
+[target.'cfg(target_os = "linux")'.dependencies]
+choscorui-linux = { path = "../../crates/choscorui-linux" }

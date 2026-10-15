@@ -1,4 +1,6 @@
-//! Benchmark driver for the reference scenarios in docs/BENCHMARKS.md.
+//! Benchmark driver for the reference scenarios in docs/performance.md.
+//! It runs on macOS with `choscorui-macos` and on Linux with
+//! `choscorui-linux`; `platform` holds the code of each OS.
 //!
 //! ```sh
 //! cargo build --release -p choscorui-gallery -p choscorui-bench
@@ -14,23 +16,25 @@
 
 mod stats;
 
-#[cfg(target_os = "macos")]
+#[cfg(any(target_os = "macos", target_os = "linux"))]
+mod platform;
+#[cfg(any(target_os = "macos", target_os = "linux"))]
 mod scenarios;
-#[cfg(target_os = "macos")]
+#[cfg(any(target_os = "macos", target_os = "linux"))]
 mod semantics;
-#[cfg(target_os = "macos")]
+#[cfg(any(target_os = "macos", target_os = "linux"))]
 mod sys;
-#[cfg(target_os = "macos")]
+#[cfg(any(target_os = "macos", target_os = "linux"))]
 mod views;
-#[cfg(target_os = "macos")]
+#[cfg(any(target_os = "macos", target_os = "linux"))]
 mod workspace;
 
 /// Counts Rust heap allocations so frames can report allocation churn.
-#[cfg(target_os = "macos")]
+#[cfg(any(target_os = "macos", target_os = "linux"))]
 #[global_allocator]
-static ALLOCATOR: choscorui_macos::CountingAllocator = choscorui_macos::CountingAllocator;
+static ALLOCATOR: platform::CountingAllocator = platform::CountingAllocator;
 
-#[cfg(target_os = "macos")]
+#[cfg(any(target_os = "macos", target_os = "linux"))]
 const SCENARIOS: [&str; 10] = [
     "startup",
     "idle",
@@ -44,10 +48,9 @@ const SCENARIOS: [&str; 10] = [
     "size",
 ];
 
-#[cfg(target_os = "macos")]
+#[cfg(any(target_os = "macos", target_os = "linux"))]
 fn main() {
-    use choscorui_core::Size;
-    use choscorui_macos::{Application, WindowOptions};
+    use choscorui_core::{Size, WindowOptions};
     use stats::{BudgetOutcome, Results};
     use std::time::Instant;
     use workspace::Workspace;
@@ -115,7 +118,7 @@ fn main() {
         }
     }
 
-    let app = Application::new().expect("AppKit must initialize on the main thread");
+    let app = platform::application();
     let size = Size::new(1200.0, 800.0);
     let mut window = app
         .create_window(WindowOptions::new(
@@ -128,8 +131,8 @@ fn main() {
     window.set_display_list(workspace.paint());
     if let Some(screen) = screen {
         // The window keeps its size and moves to the top-left corner of
-        // the visible frame of that screen.
-        let frames = choscorui_macos::screen_visible_frames().expect("screen frames");
+        // the visible frame of that screen. Wayland ignores the origin.
+        let frames = platform::screens(&app);
         let Some(visible) = frames.get(screen) else {
             eprintln!("no screen {screen}; {} screens are connected", frames.len());
             std::process::exit(2);
@@ -140,8 +143,8 @@ fn main() {
             .set_geometry(&geometry)
             .expect("the window must move to the screen");
     }
-    window.show();
-    app.activate();
+    platform::show(&mut window);
+    platform::activate(&app);
     scenarios::present(&app, &window, 0);
     results.metric("display.scale", window.backing_scale_factor());
 
@@ -174,13 +177,18 @@ fn main() {
     step("semantics", &mut |r| {
         semantics::semantics(window.content_size(), r)
     });
-    window.close();
+    platform::close(&mut window);
     drop(window);
     step("windows", &mut |r| scenarios::windows(&app, &config, r));
 
     let mut report = String::from("# choscorui benchmark results\n");
     for (key, value) in sys::manifest() {
         report.push_str(&format!("{key}={value}\n"));
+    }
+    if !platform::DISPLAY_TIMING {
+        results
+            .notes
+            .push("display_ms: the windows do not report the display time".into());
     }
     report.push_str(&format!(
         "run.mode={}\n",
@@ -249,7 +257,7 @@ fn main() {
 /// Launches each startup target `runs + 1` times (the first is a discarded
 /// warm-up) and records the child's first-frame time and the driver's
 /// spawn-to-report time.
-#[cfg(target_os = "macos")]
+#[cfg(any(target_os = "macos", target_os = "linux"))]
 fn startup(
     bin_dir: &std::path::Path,
     executable: &std::path::Path,
@@ -320,7 +328,7 @@ fn startup(
     }
 }
 
-#[cfg(not(target_os = "macos"))]
+#[cfg(not(any(target_os = "macos", target_os = "linux")))]
 fn main() {
-    eprintln!("choscorui-bench currently supports macOS only");
+    eprintln!("choscorui-bench supports macOS and Linux only");
 }
