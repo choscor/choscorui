@@ -155,6 +155,16 @@ The changes of the input method come in a group that ends with `done`. Each grou
 
 `input_methods` is `Supported` when the compositor has `zwp_text_input_manager_v3`.
 
+## Wayland cursors
+
+The cursor of a window comes from the first source that the compositor allows:
+
+1. A custom image goes in a `wl_shm` buffer on a cursor surface.
+2. With `wp_cursor_shape_v1`, the compositor draws the cursor of the shape.
+3. Else, libwayland-cursor loads the Xcursor theme of `XCURSOR_THEME` at the size of `XCURSOR_SIZE`. The default size is 24 pixels.
+
+The theme loads at the integer scale of the window under the pointer, and the cursor surface has that buffer scale. When the theme has no cursor of the shape, the cursors that libwayland-cursor has built in show.
+
 ## Alert sound
 
 `Application::beep()` plays the alert sound of the controls. It uses the first source that works:

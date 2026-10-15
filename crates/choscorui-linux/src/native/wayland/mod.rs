@@ -128,6 +128,9 @@ struct Seat {
     axis: Axis,
     cursor_device: Option<Proxy>,
     cursor_surface: Option<(Proxy, Buffers)>,
+    /// The Xcursor theme and its buffer scale, when the compositor has
+    /// no cursor shapes.
+    cursor_theme: Option<(i32, wl::cursor::CursorTheme)>,
 }
 
 /// A connection to a Wayland compositor and its windows.
@@ -184,6 +187,10 @@ const POINTER_AXIS_DISCRETE: u16 = 8;
 const POINTER_AXIS_VALUE120: u16 = 9;
 const POINTER_SET_CURSOR: u16 = 0;
 const BELL_RING: u16 = 1;
+const SURFACE_ATTACH: u16 = 1;
+const SURFACE_DAMAGE: u16 = 2;
+const SURFACE_COMMIT: u16 = 6;
+const SURFACE_SET_BUFFER_SCALE: u16 = 8;
 const KEYBOARD_KEYMAP: u16 = 0;
 const KEYBOARD_ENTER: u16 = 1;
 const KEYBOARD_LEAVE: u16 = 2;
@@ -247,6 +254,19 @@ fn cursor_shape(shape: &CursorShape) -> u32 {
     }
 }
 
+/// The Xcursor names of `shape`, then the names of the cursors that
+/// libwayland-cursor has built in, for a system without a theme.
+fn theme_names(shape: &CursorShape, names: [&'static str; 2]) -> Vec<&'static str> {
+    let built_in = match shape {
+        CursorShape::ResizeLeftRight => "right_side",
+        CursorShape::ResizeUpDown => "bottom_side",
+        _ => "left_ptr",
+    };
+    let mut all = names.to_vec();
+    all.extend([built_in, "left_ptr"]);
+    all
+}
+
 fn connection_error(error: wl::WaylandError) -> Error {
     match error {
         wl::WaylandError::Library(error) => Error::Library(error),
@@ -287,6 +307,7 @@ impl Client {
                 axis: Axis::default(),
                 cursor_device: None,
                 cursor_surface: None,
+                cursor_theme: None,
             }),
             launch_token: RefCell::new(
                 std::env::var("XDG_ACTIVATION_TOKEN")
@@ -606,8 +627,10 @@ impl Client {
                     _ => return,
                 },
             };
+            // A theme cursor may have set another scale on the surface.
+            let _ = surface.request(SURFACE_SET_BUFFER_SCALE, &[Arg::Int(1)]);
             fill_surface(&surface, &mut buffers, shm, image);
-            let _ = surface.request(6, &[]);
+            let _ = surface.request(SURFACE_COMMIT, &[]);
             let _ = pointer.request(
                 POINTER_SET_CURSOR,
                 &[
@@ -618,6 +641,10 @@ impl Client {
                 ],
             );
             seat.cursor_surface = Some((surface, buffers));
+            return;
+        }
+        if globals.cursor_shape.is_none() {
+            Self::apply_theme_cursor(&globals, seat, shape);
             return;
         }
         if seat.cursor_device.is_none()
@@ -637,6 +664,82 @@ impl Client {
                 &[Arg::Uint(serial), Arg::Uint(cursor_shape(shape))],
             );
         }
+    }
+
+    /// Shows a cursor of the Xcursor theme of `XCURSOR_THEME` at
+    /// `XCURSOR_SIZE`, at the scale of the window under the pointer.
+    fn apply_theme_cursor(globals: &Globals, seat: &mut Seat, shape: &CursorShape) {
+        let (Some(pointer), Some(compositor), Some(shm)) =
+            (&seat.pointer, &globals.compositor, &globals.shm)
+        else {
+            return;
+        };
+        let Some((_, names, _)) = super::x11::cursor_names(shape) else {
+            return;
+        };
+        let scale = seat
+            .pointer_focus
+            .as_ref()
+            .and_then(Weak::upgrade)
+            .map_or(1, |window| window.scale().ceil().max(1.0) as i32);
+        if seat
+            .cursor_theme
+            .as_ref()
+            .is_none_or(|(loaded, _)| *loaded != scale)
+        {
+            let size = std::env::var("XCURSOR_SIZE")
+                .ok()
+                .and_then(|size| size.parse::<u32>().ok())
+                .filter(|size| (1..=256).contains(size))
+                .unwrap_or(24);
+            let theme = std::env::var("XCURSOR_THEME").ok();
+            seat.cursor_theme = wl::cursor::CursorTheme::load(
+                shm,
+                theme.as_deref().filter(|name| !name.is_empty()),
+                size * scale.unsigned_abs(),
+            )
+            .map(|theme| (scale, theme));
+        }
+        let Some(image) = seat
+            .cursor_theme
+            .as_ref()
+            .and_then(|(_, theme)| theme.image(&theme_names(shape, names)))
+        else {
+            return;
+        };
+        let (surface, buffers) = match seat.cursor_surface.take() {
+            Some(existing) => existing,
+            None => match compositor.request(0, &[Arg::NewId]) {
+                Ok(Some(surface)) => (surface, Buffers::default()),
+                _ => return,
+            },
+        };
+        let _ = surface.request(SURFACE_SET_BUFFER_SCALE, &[Arg::Int(scale)]);
+        let _ = surface.request(
+            SURFACE_ATTACH,
+            &[Arg::Object(Some(&image.buffer)), Arg::Int(0), Arg::Int(0)],
+        );
+        let to_i32 = |value: u32| i32::try_from(value).unwrap_or(i32::MAX);
+        let _ = surface.request(
+            SURFACE_DAMAGE,
+            &[
+                Arg::Int(0),
+                Arg::Int(0),
+                Arg::Int(to_i32(image.width)),
+                Arg::Int(to_i32(image.height)),
+            ],
+        );
+        let _ = surface.request(SURFACE_COMMIT, &[]);
+        let _ = pointer.request(
+            POINTER_SET_CURSOR,
+            &[
+                Arg::Uint(seat.enter_serial),
+                Arg::Object(Some(&surface)),
+                Arg::Int(to_i32(image.hotspot.0) / scale),
+                Arg::Int(to_i32(image.hotspot.1) / scale),
+            ],
+        );
+        seat.cursor_surface = Some((surface, buffers));
     }
 
     /// The deadline of the next key repeat.
@@ -1300,4 +1403,44 @@ fn fill_surface(
             Arg::Int(i32::MAX),
         ],
     );
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Needs a compositor: it runs only with `CHOSCORUI_RUN_LINUX_SMOKE=1`
+    /// in `scripts/linux/headless-session.sh`.
+    #[test]
+    fn wayland_session_cursor_theme_has_every_shape() {
+        if std::env::var("CHOSCORUI_RUN_LINUX_SMOKE").is_err()
+            || std::env::var_os("WAYLAND_DISPLAY").is_none()
+        {
+            return;
+        }
+        let client = Client::connect().unwrap();
+        let globals = client.globals.borrow();
+        let theme = wl::cursor::CursorTheme::load(globals.shm.as_ref().unwrap(), None, 24).unwrap();
+        let shapes = [
+            CursorShape::Arrow,
+            CursorShape::IBeam,
+            CursorShape::PointingHand,
+            CursorShape::ClosedHand,
+            CursorShape::OpenHand,
+            CursorShape::Crosshair,
+            CursorShape::NotAllowed,
+            CursorShape::ResizeLeftRight,
+            CursorShape::ResizeUpDown,
+            CursorShape::ResizeNorthWestSouthEast,
+            CursorShape::ResizeNorthEastSouthWest,
+        ];
+        for shape in shapes {
+            let (_, names, _) = super::super::x11::cursor_names(&shape).unwrap();
+            let image = theme.image(&theme_names(&shape, names));
+            assert!(
+                image.is_some_and(|image| image.width > 0 && image.height > 0),
+                "{shape:?}"
+            );
+        }
+    }
 }

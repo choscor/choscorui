@@ -157,7 +157,7 @@ const VIRTUAL_CORE_POINTER: u16 = 2;
 
 /// The index of a cursor shape, and the theme names and the core cursor
 /// font glyph of the shapes that are not custom.
-fn cursor_names(shape: &CursorShape) -> Option<(usize, [&'static str; 2], u16)> {
+pub(crate) fn cursor_names(shape: &CursorShape) -> Option<(usize, [&'static str; 2], u16)> {
     Some(match shape {
         CursorShape::Arrow => (0, ["default", "left_ptr"], 68),
         CursorShape::IBeam => (1, ["text", "xterm"], 152),

@@ -255,6 +255,17 @@ The tests check window construction, title, visibility, resize, scale, and close
 - **Threads.** Each decode makes its own decoder objects, so decode and encode work on any thread.
 - **Tests.** `tests/codecs.rs` decodes a fixture of each format and damaged data. It also hides libtiff with `CHOSCORUI_TEST_HIDE_LIB` in a child process.
 
+## Linux cursor themes and sounds
+
+`src/ffi/wayland/cursor.rs` loads libwayland-cursor, and `src/ffi/canberra.rs` loads libcanberra, through `libraries!`.
+
+- **Cursor ownership.** `CursorTheme` holds the Wayland connection open, and its drop calls `wl_cursor_theme_destroy`. The theme owns the cursor buffers. Thus, the `Proxy` of a buffer does not destroy it.
+- **Cursor buffers.** The seat keeps the theme while a cursor surface can show its buffer. A scale change loads a new theme before it drops the old one.
+- **Sound ownership.** Each thread keeps one `ca_context` until the thread ends, because a sound plays after `ca_context_play_full` returns. Each property list is destroyed after the play call.
+- **Callbacks.** Neither library calls Rust code: the play call gets no finish callback.
+- **Threads.** Cursor calls run on the UI thread that owns the `Application`.
+- **Tests.** The binding check compiles each declaration against the headers. A Wayland session test loads the theme and finds a cursor for each shape.
+
 ## Linux X11
 
 `choscorui-linux` loads libxcb, libxcb-xkb, libxcb-xinput, libxcb-shm, libxcb-randr, libxcb-render, libxcb-cursor, and libxkbcommon-x11 through `libraries!` in `src/ffi/x11.rs`. The safe `Connection` type there is the only caller.

@@ -26,6 +26,7 @@ smoke() {
     echo "== smoke: CHOSCORUI_BACKEND=$backend CHOSCORUI_PAINTER=$painter"
     export CHOSCORUI_BACKEND=$backend CHOSCORUI_PAINTER=$painter CHOSCORUI_RUN_LINUX_SMOKE=1
     $session cargo test -p choscorui-linux --test window_smoke --locked
+    $session cargo test -p choscorui-linux --lib --locked wayland_session_
     $session cargo test -p choscorui-linux --test clipboard_smoke --locked -- --test-threads=1
     $session cargo test -p choscorui-linux --test ime_smoke --locked -- --test-threads=1
     $session cargo test -p choscorui --test app_smoke --locked

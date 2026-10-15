@@ -14,6 +14,7 @@
 //! Each proxy has a unique `ObjectId` in its user data. Ids are never
 //! reused, so a queued event never names a newer object by mistake.
 
+pub(crate) mod cursor;
 pub(crate) mod protocols;
 pub(crate) mod sys;
 
