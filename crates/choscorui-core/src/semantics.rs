@@ -1,3 +1,4 @@
+use crate::order::stable_order;
 use crate::{NodeId, Rect, SemanticParts, Tree};
 use std::collections::HashMap;
 use std::ops::Range;
@@ -431,13 +432,14 @@ impl SemanticTree {
     }
 
     pub fn prune(&mut self, tree: &Tree) -> Vec<NodeId> {
-        let mut removed: Vec<_> = self
+        let found: Vec<_> = self
             .nodes
             .keys()
             .copied()
             .filter(|id| !tree.contains(*id))
             .collect();
-        removed.sort_by_key(|id| id.0);
+        let order = stable_order(found.len(), &|a, b| found[a].cmp(&found[b]));
+        let removed: Vec<_> = order.into_iter().map(|index| found[index]).collect();
         for id in &removed {
             self.nodes.remove(id);
             self.collections.remove(id);

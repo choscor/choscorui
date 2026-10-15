@@ -138,6 +138,7 @@ pub use hosted::Reveal;
 mod layout;
 mod listbox;
 mod nav;
+mod order;
 mod overlay;
 pub use chat::{
     Attachment, AttachmentMedia, Bubble, Conversation, Marker, Message, MessageScroller,

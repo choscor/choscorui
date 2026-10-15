@@ -1465,8 +1465,8 @@ impl CustomControl for ItemView {
         }
         // The same selection again, as a host pushes it with each new
         // configuration, keeps the current row.
-        let keys: std::collections::BTreeSet<ItemKey> =
-            indices.iter().map(|index| self.order[*index]).collect();
+        let mut keys = std::collections::BTreeSet::new();
+        keys.extend(indices.iter().map(|index| self.order[*index]));
         if keys.len() == self.selection.len()
             && keys.iter().all(|key| self.selection.is_selected(*key))
         {

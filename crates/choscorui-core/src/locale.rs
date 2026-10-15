@@ -5,6 +5,7 @@
 //! rest. Applications supply translations as [`Catalog`] entries.
 
 use crate::LayoutDirection;
+use crate::order::stable_order;
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::fmt;
 use std::sync::{Arc, OnceLock};
@@ -642,9 +643,9 @@ impl Catalog {
         let mut issues = Vec::new();
         let empty = BTreeMap::new();
         let base = self.messages.get(&reference.tag()).unwrap_or(&empty);
-        let mut tags: Vec<&String> = self.messages.keys().collect();
-        tags.sort();
-        for tag in tags {
+        let tags: Vec<&String> = self.messages.keys().collect();
+        let order = stable_order(tags.len(), &|a, b| tags[a].cmp(tags[b]));
+        for tag in order.into_iter().map(|index| tags[index]) {
             let messages = &self.messages[tag];
             let Ok(locale) = Locale::parse(tag) else {
                 continue;

@@ -3,6 +3,7 @@
 //! documented reversible mapping), so a selection made through one adapter
 //! still names the same items after re-sorting, filtering, or composing.
 
+use crate::order::stable_order;
 use crate::{BasicCollator, ChangeLog, Collator, ItemKey, ItemModel, ModelChange, Role, Value};
 use std::collections::{HashMap, HashSet};
 
@@ -212,8 +213,9 @@ impl SortFilterProxy {
             self.log.record(ModelChange::Reset);
             return;
         }
-        let mut parent_keys: Vec<_> = old.keys().chain(self.rows.keys()).copied().collect();
-        parent_keys.sort();
+        let keys: Vec<_> = old.keys().chain(self.rows.keys()).copied().collect();
+        let order = stable_order(keys.len(), &|a, b| keys[a].cmp(&keys[b]));
+        let mut parent_keys: Vec<_> = order.into_iter().map(|index| keys[index]).collect();
         parent_keys.dedup();
         for parent in parent_keys {
             let empty = Vec::new();
@@ -245,11 +247,10 @@ impl SortFilterProxy {
             }
         }
         if let Some((column, order)) = self.sort {
-            let values: HashMap<ItemKey, Value> = kept
-                .iter()
-                .map(|key| (*key, sort_value(source, *key, column)))
+            let values: Vec<Value> = (kept.iter())
+                .map(|key| sort_value(source, *key, column))
                 .collect();
-            kept.sort_by(|a, b| {
+            let sorted = stable_order(kept.len(), &|a, b| {
                 let ordering = match (&values[a], &values[b]) {
                     (Value::Text(x), Value::Text(y)) => self.collator.compare(x, y),
                     (x, y) => x.compare(y),
@@ -259,6 +260,7 @@ impl SortFilterProxy {
                     SortOrder::Descending => ordering.reverse(),
                 }
             });
+            kept = sorted.into_iter().map(|index| kept[index]).collect();
         }
         let any = !kept.is_empty();
         if any || parent.is_none() {

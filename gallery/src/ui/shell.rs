@@ -145,10 +145,11 @@ pub struct WindowState {
 /// ignoring case and Latin diacritics, in sidebar order.
 pub fn matching_pages(query: &str, shared: &Shared) -> Vec<usize> {
     let query = fold_for_search(query.trim());
-    let mut order: Vec<usize> = (0..PAGES.len()).collect();
-    order.sort_by_key(|index| (PAGES[*index].category, *index));
+    // The pages of each category, in catalog order.
+    let order = Category::ALL.into_iter().flat_map(|category| {
+        (0..PAGES.len()).filter(move |index| PAGES[*index].category == category)
+    });
     order
-        .into_iter()
         .filter(|index| {
             query.is_empty()
                 || fold_for_search(&shared.page_title(*index)).contains(&query)

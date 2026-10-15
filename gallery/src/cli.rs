@@ -64,7 +64,7 @@ pub fn suggestions(id: &str) -> Vec<&'static str> {
         .map(|page| (distance(id, page.id), page.id))
         .filter(|(score, page)| *score <= page.len().max(id.len()) / 2)
         .collect();
-    scored.sort();
+    scored.sort_unstable();
     scored.into_iter().take(3).map(|(_, page)| page).collect()
 }
 

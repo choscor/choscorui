@@ -163,7 +163,7 @@ impl DockLayout {
             )
             .collect();
         let line = |rect: &Rect| if rtl { -rect.max_x() } else { rect.origin.x };
-        docked.sort_by(|(a, _), (b, _)| {
+        crate::order::sort_by(&mut docked, |(a, _), (b, _)| {
             a.origin
                 .y
                 .total_cmp(&b.origin.y)

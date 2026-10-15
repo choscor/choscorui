@@ -100,6 +100,7 @@ pub use model::{
     Value, visible_keys,
 };
 mod fs_model;
+mod order;
 pub use fs_model::{
     DirectoryState, FS_COLUMN_KIND, FS_COLUMN_MODIFIED, FS_COLUMN_NAME, FS_COLUMN_SIZE, FileEntry,
     FileSystemModel, format_size,

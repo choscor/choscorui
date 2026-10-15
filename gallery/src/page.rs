@@ -21,7 +21,7 @@ pub enum Category {
 }
 
 impl Category {
-    #[cfg(test)]
+    /// Every category, in display order.
     pub const ALL: [Category; 14] = [
         Self::Static,
         Self::Inputs,

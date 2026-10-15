@@ -718,7 +718,7 @@ impl Calendar {
                     }
                     None => {
                         days.push(date);
-                        days.sort();
+                        crate::order::sort_by(&mut days, Ord::cmp);
                     }
                 }
                 days
@@ -746,7 +746,7 @@ impl Calendar {
                 self.select(*date);
             }
         }
-        dates.sort();
+        crate::order::sort_by(&mut dates, Ord::cmp);
         dates.dedup();
         if self.mode == CalendarMode::Range && dates.len() > 2 {
             dates = vec![dates[0], dates[dates.len() - 1]];

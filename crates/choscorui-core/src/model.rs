@@ -717,7 +717,8 @@ impl Selection {
     /// Replaces the selected keys with `keys`. Returns true when the set
     /// changed.
     fn replace(&mut self, keys: impl Iterator<Item = ItemKey>) -> bool {
-        let next: BTreeSet<ItemKey> = keys.collect();
+        let mut next = BTreeSet::new();
+        next.extend(keys);
         let changed = next != self.selected;
         self.selected = next;
         changed

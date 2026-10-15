@@ -1209,7 +1209,7 @@ impl ViewHost {
             if due.is_empty() {
                 break;
             }
-            due.sort();
+            due.sort_unstable();
             due.dedup();
             for id in due {
                 self.inner.run_reaction(id);
@@ -1772,7 +1772,7 @@ impl ViewHost {
         let all = std::mem::take(&mut self.inner.semantic_all);
         let mut candidates: Vec<NodeId> = if all {
             let mut nodes: Vec<NodeId> = self.inner.nodes.keys().copied().collect();
-            nodes.sort();
+            nodes.sort_unstable();
             nodes
         } else {
             std::mem::take(&mut self.inner.semantic_dirty)

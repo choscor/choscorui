@@ -70,8 +70,12 @@ pub fn order_dialog_buttons(buttons: &[DialogButton], rtl: bool) -> (Vec<usize>,
         DialogButtonRole::Reject => 3,
         DialogButtonRole::Destructive | DialogButtonRole::Accept => 4,
     };
-    let mut order: Vec<usize> = (0..buttons.len()).collect();
-    order.sort_by_key(|index| rank(buttons[*index].role));
+    // The buttons of each rank, in their given order.
+    let mut order: Vec<usize> = (0..=4)
+        .flat_map(|level| {
+            (0..buttons.len()).filter(move |index| rank(buttons[*index].role) == level)
+        })
+        .collect();
     let gap = order
         .iter()
         .position(|index| rank(buttons[*index].role) >= 2)

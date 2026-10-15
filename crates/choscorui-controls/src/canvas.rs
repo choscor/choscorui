@@ -253,7 +253,7 @@ impl CanvasView {
         &self.selection
     }
     pub fn set_selection(&mut self, ids: impl IntoIterator<Item = SceneItemId>) {
-        self.selection = ids.into_iter().collect();
+        self.selection = id_set(ids);
     }
     pub fn focus(&self) -> Option<SceneItemId> {
         self.focus
@@ -294,7 +294,7 @@ impl CanvasView {
                                 self.selection.insert(id);
                             }
                         } else if !collapse {
-                            self.selection = BTreeSet::from([id]);
+                            self.selection = id_set([id]);
                         }
                         self.focus = Some(id);
                         response.selection_changed = before != self.selection;
@@ -364,17 +364,12 @@ impl CanvasView {
                         extend,
                     };
                     let band = rect_from(self.view_to_scene(anchor), self.view_to_scene(at));
-                    let inside: BTreeSet<_> = match self.band_mode {
+                    let inside = id_set(match self.band_mode {
                         BandMode::Contain => scene.items_within(band),
                         BandMode::Intersect => scene.items_touching(band),
-                    }
-                    .into_iter()
-                    .collect();
-                    let next: BTreeSet<_> = if extend {
-                        self.band_base
-                            .symmetric_difference(&inside)
-                            .copied()
-                            .collect()
+                    });
+                    let next = if extend {
+                        id_set(self.band_base.symmetric_difference(&inside).copied())
                     } else {
                         inside
                     };
@@ -420,7 +415,7 @@ impl CanvasView {
                 }
             }
             CanvasInput::SelectAll => {
-                let all: BTreeSet<_> = scene.selectable_items().iter().copied().collect();
+                let all = id_set(scene.selectable_items().iter().copied());
 
                 response.selection_changed = all != self.selection;
                 response.repaint = response.selection_changed;
@@ -454,7 +449,7 @@ impl CanvasView {
     /// Focuses and selects `id`, and scrolls it into view.
     fn focus_item(&mut self, scene: &Scene, id: SceneItemId, response: &mut CanvasResponse) {
         self.focus = Some(id);
-        self.selection = BTreeSet::from([id]);
+        self.selection = id_set([id]);
         self.ensure_visible(scene, id);
         response.selection_changed = true;
         response.repaint = true;
@@ -740,12 +735,20 @@ impl CanvasView {
             }
             SemanticAction::Activate => {
                 self.focus = Some(id);
-                self.selection = BTreeSet::from([id]);
+                self.selection = id_set([id]);
                 true
             }
             _ => false,
         }
     }
+}
+
+/// The set of `ids`. It inserts them one by one, so the controls need no
+/// sort code for item sets.
+fn id_set(ids: impl IntoIterator<Item = SceneItemId>) -> BTreeSet<SceneItemId> {
+    let mut set = BTreeSet::new();
+    set.extend(ids);
+    set
 }
 
 fn rect_from(a: Point, b: Point) -> Rect {
