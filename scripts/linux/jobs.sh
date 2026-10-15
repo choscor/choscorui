@@ -29,6 +29,11 @@ smoke() {
     $session cargo test -p choscorui-linux --lib --locked wayland_session_
     $session cargo test -p choscorui-linux --test clipboard_smoke --locked -- --test-threads=1
     $session cargo test -p choscorui-linux --test ime_smoke --locked -- --test-threads=1
+    if [ "$backend" = x11 ]; then
+        # The local input method of Xlib opens and closes cleanly.
+        $session env XMODIFIERS=@im=none \
+            cargo test -p choscorui-linux --test ime_smoke --locked -- --test-threads=1
+    fi
     $session cargo test -p choscorui-linux --test lifetime_smoke --locked -- --test-threads=1
     $session cargo test -p choscorui-linux --test modal_smoke --locked -- --test-threads=1
     $session cargo test -p choscorui-linux --test menu_smoke --locked -- --test-threads=1

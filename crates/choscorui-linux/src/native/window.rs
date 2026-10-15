@@ -75,6 +75,8 @@ pub(crate) trait Surface {
     /// Test support: moves the pointer to `position` and, with `button`,
     /// presses or releases the left button.
     fn simulate_pointer(&self, position: Point, button: Option<bool>) -> Result<(), Error>;
+    /// Test support: presses or releases the key of an evdev code.
+    fn simulate_key(&self, code: u32, pressed: bool) -> Result<(), Error>;
 }
 
 /// The formats and operations that a window takes from drags.
@@ -567,5 +569,17 @@ impl Window {
             return Err(Error::Closed);
         }
         self.surface.simulate_pointer(position, button)
+    }
+
+    /// Test support: presses (`true`) or releases (`false`) the key of
+    /// the Linux evdev code `code`, such as 30 for the A key. The key goes
+    /// to the window with the keyboard focus. It uses XTEST on X11;
+    /// Wayland has no such protocol.
+    #[doc(hidden)]
+    pub fn simulate_key(&self, code: u32, pressed: bool) -> Result<(), Error> {
+        if self.shared.closed.get() {
+            return Err(Error::Closed);
+        }
+        self.surface.simulate_key(code, pressed)
     }
 }

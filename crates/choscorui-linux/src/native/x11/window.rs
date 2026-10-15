@@ -1098,6 +1098,11 @@ impl Surface for X11Surface {
         let client = self.client().ok_or(Error::Closed)?;
         client.simulate_pointer(self.id, position, button)
     }
+
+    fn simulate_key(&self, code: u32, pressed: bool) -> Result<(), Error> {
+        let client = self.client().ok_or(Error::Closed)?;
+        client.simulate_key(code, pressed)
+    }
 }
 
 #[cfg(test)]

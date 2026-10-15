@@ -1222,4 +1222,8 @@ impl Surface for WaylandWindow {
     fn simulate_pointer(&self, _position: Point, _button: Option<bool>) -> Result<(), Error> {
         Err(Error::MissingProtocol("fake pointer input"))
     }
+
+    fn simulate_key(&self, _code: u32, _pressed: bool) -> Result<(), Error> {
+        Err(Error::MissingProtocol("fake key input"))
+    }
 }

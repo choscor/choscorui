@@ -930,6 +930,24 @@ impl Client {
         Ok(())
     }
 
+    /// Test support: presses or releases the key of the evdev code `code`
+    /// through XTEST. The key goes to the window with the input focus.
+    pub(crate) fn simulate_key(&self, code: u32, pressed: bool) -> Result<(), Error> {
+        // X11 key codes are the evdev codes plus 8, and fit in a byte.
+        let keycode = u8::try_from(code.saturating_add(8))
+            .map_err(|_| Error::MissingProtocol("X11 key codes above 255"))?;
+        let kind = if pressed {
+            XCB_KEY_PRESS
+        } else {
+            XCB_KEY_RELEASE
+        };
+        self.connection
+            .fake_input(kind, keycode, (0, 0))
+            .map_err(Error::Library)?;
+        self.connection.flush();
+        Ok(())
+    }
+
     /// Handles an error of a request. A failed MIT-SHM request turns
     /// shared images off; the other errors concern windows that are
     /// already gone.
