@@ -6,11 +6,16 @@
 //!
 //! The walk runs only with `CHOSCORUI_RUN_LINUX_SMOKE=1`, inside
 //! `scripts/linux/headless-session.sh`, which starts `at-spi2-registryd`.
-//! `crates/choscorui-linux/tests/atspi_smoke.rs` checks every role on a
-//! synthetic window. This test does not verify a screen reader.
+//! `tests/atspi_smoke.rs` checks every role on a synthetic window. This
+//! test does not verify a screen reader.
+//!
+//! The test lives here, not in the gallery, because the gallery depends on
+//! the facade alone. Build the gallery first (`cargo build -p
+//! choscorui-gallery`): the test runs the binary next to its own
+//! directory of test executables.
 #![cfg(target_os = "linux")]
 
-use choscorui::core::SemanticRole;
+use choscorui_core::SemanticRole;
 use choscorui_linux::dbus::{Connection, MatchRule, Subscription, Value};
 use std::cell::RefCell;
 use std::path::PathBuf;
@@ -330,6 +335,23 @@ impl Object {
     }
 }
 
+/// The gallery executable of the same build profile: test executables
+/// are in `deps/` under the profile directory, and binaries are in it.
+fn gallery_binary() -> PathBuf {
+    let test = std::env::current_exe().expect("the test knows its path");
+    let binary = test
+        .parent()
+        .and_then(std::path::Path::parent)
+        .expect("the test runs from the deps directory of a profile")
+        .join("choscorui-gallery");
+    assert!(
+        binary.is_file(),
+        "build the gallery first: cargo build -p choscorui-gallery ({})",
+        binary.display()
+    );
+    binary
+}
+
 /// The gallery process. A drop stops it, also when an assertion fails.
 struct Gallery {
     child: Child,
@@ -343,7 +365,7 @@ impl Gallery {
             "choscorui-gallery-atspi-{}.txt",
             std::process::id()
         ));
-        let child = Command::new(env!("CARGO_BIN_EXE_choscorui-gallery"))
+        let child = Command::new(gallery_binary())
             .arg(page)
             .env("CHOSCORUI_GALLERY_SETTINGS", &settings)
             .env("CHOSCORUI_GALLERY_LANG", "en")
