@@ -262,7 +262,8 @@ and Super for Control.
 - The semantic description of the row uses the same label.
 
 [pc_keys.rs](../crates/choscorui-controls/tests/pc_keys.rs) pins this
-behavior.
+behavior. The `key_conventions.txt` golden file pins the labels and the
+editing keys of the two conventions.
 
 ```mermaid
 flowchart LR

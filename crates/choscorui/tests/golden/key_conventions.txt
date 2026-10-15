@@ -1,0 +1,112 @@
+# menu labels Mac
+  DrawText { baseline: Point { x: 98.39999999999999, y: 89.9 }, text: "Right click here", font_family: "system-ui", font_size: 14.0, font_weight: FontWeight(400), font_slant: Upright, tracking: 0.0, color: Color { red: 115, green: 115, blue: 115, alpha: 255 } }
+  DrawText { baseline: Point { x: 272.5, y: 109.2 }, text: "⌘S", font_family: "system-ui", font_size: 12.0, font_weight: FontWeight(400), font_slant: Upright, tracking: 1.2000000000000002, color: Color { red: 23, green: 23, blue: 23, alpha: 255 } }
+  DrawText { baseline: Point { x: 172.0, y: 109.9 }, text: "Save", font_family: "system-ui", font_size: 14.0, font_weight: FontWeight(400), font_slant: Upright, tracking: 0.0, color: Color { red: 23, green: 23, blue: 23, alpha: 255 } }
+  DrawText { baseline: Point { x: 264.70000000000005, y: 141.2 }, text: "⇧⌘S", font_family: "system-ui", font_size: 12.0, font_weight: FontWeight(400), font_slant: Upright, tracking: 1.2000000000000002, color: Color { red: 115, green: 115, blue: 115, alpha: 255 } }
+  DrawText { baseline: Point { x: 172.0, y: 141.9 }, text: "Save As", font_family: "system-ui", font_size: 14.0, font_weight: FontWeight(400), font_slant: Upright, tracking: 0.0, color: Color { red: 10, green: 10, blue: 10, alpha: 255 } }
+  DrawText { baseline: Point { x: 264.70000000000005, y: 173.2 }, text: "⌥F4", font_family: "system-ui", font_size: 12.0, font_weight: FontWeight(400), font_slant: Upright, tracking: 1.2000000000000002, color: Color { red: 115, green: 115, blue: 115, alpha: 255 } }
+  DrawText { baseline: Point { x: 172.0, y: 173.9 }, text: "Close", font_family: "system-ui", font_size: 14.0, font_weight: FontWeight(400), font_slant: Upright, tracking: 0.0, color: Color { red: 10, green: 10, blue: 10, alpha: 255 } }
+  DrawText { baseline: Point { x: 264.70000000000005, y: 205.2 }, text: "⌃⌘F", font_family: "system-ui", font_size: 12.0, font_weight: FontWeight(400), font_slant: Upright, tracking: 1.2000000000000002, color: Color { red: 115, green: 115, blue: 115, alpha: 255 } }
+  DrawText { baseline: Point { x: 172.0, y: 205.9 }, text: "Full Screen", font_family: "system-ui", font_size: 14.0, font_weight: FontWeight(400), font_slant: Upright, tracking: 0.0, color: Color { red: 10, green: 10, blue: 10, alpha: 255 } }
+  DrawText { baseline: Point { x: 241.3, y: 237.2 }, text: "⌘K, ⌘G", font_family: "system-ui", font_size: 12.0, font_weight: FontWeight(400), font_slant: Upright, tracking: 1.2000000000000002, color: Color { red: 115, green: 115, blue: 115, alpha: 255 } }
+  DrawText { baseline: Point { x: 172.0, y: 237.9 }, text: "Go", font_family: "system-ui", font_size: 14.0, font_weight: FontWeight(400), font_slant: Upright, tracking: 0.0, color: Color { red: 10, green: 10, blue: 10, alpha: 255 } }
+  DrawText { baseline: Point { x: 233.5, y: 269.2 }, text: "Any key", font_family: "system-ui", font_size: 12.0, font_weight: FontWeight(400), font_slant: Upright, tracking: 1.2000000000000002, color: Color { red: 115, green: 115, blue: 115, alpha: 255 } }
+  DrawText { baseline: Point { x: 172.0, y: 269.9 }, text: "Note", font_family: "system-ui", font_size: 14.0, font_weight: FontWeight(400), font_slant: Upright, tracking: 0.0, color: Color { red: 10, green: 10, blue: 10, alpha: 255 } }
+  part 0 in None: Menu "" value None desc "" [] []
+  part 1 in Some(0): MenuItem "Save" value None desc "⌘S" [focused selected=true] [Activate]
+  part 2 in Some(0): MenuItem "Save As" value None desc "⇧⌘S" [selected=false] [Activate]
+  part 3 in Some(0): MenuItem "Close" value None desc "⌥F4" [selected=false] [Activate]
+  part 4 in Some(0): MenuItem "Full Screen" value None desc "⌃⌘F" [selected=false] [Activate]
+  part 5 in Some(0): MenuItem "Go" value None desc "⌘K, ⌘G" [selected=false] [Activate]
+  part 6 in Some(0): MenuItem "Note" value None desc "Any key" [selected=false] [Activate]
+# shortcut field Mac
+  DrawText { baseline: Point { x: 24.0, y: 32.2 }, text: "⌘K", font_family: "system-ui", font_size: 12.0, font_weight: FontWeight(500), font_slant: Upright, tracking: 0.0, color: Color { red: 115, green: 115, blue: 115, alpha: 255 } }
+  DrawText { baseline: Point { x: 49.2, y: 32.2 }, text: "⇧⌘Space", font_family: "system-ui", font_size: 12.0, font_weight: FontWeight(500), font_slant: Upright, tracking: 0.0, color: Color { red: 115, green: 115, blue: 115, alpha: 255 } }
+  value Some("⌘K, ⇧⌘Space")
+# menu labels Pc
+  DrawText { baseline: Point { x: 98.39999999999999, y: 89.9 }, text: "Right click here", font_family: "system-ui", font_size: 14.0, font_weight: FontWeight(400), font_slant: Upright, tracking: 0.0, color: Color { red: 115, green: 115, blue: 115, alpha: 255 } }
+  DrawText { baseline: Point { x: 311.5, y: 109.2 }, text: "Ctrl+S", font_family: "system-ui", font_size: 12.0, font_weight: FontWeight(400), font_slant: Upright, tracking: 1.2000000000000002, color: Color { red: 23, green: 23, blue: 23, alpha: 255 } }
+  DrawText { baseline: Point { x: 172.0, y: 109.9 }, text: "Save", font_family: "system-ui", font_size: 14.0, font_weight: FontWeight(400), font_slant: Upright, tracking: 0.0, color: Color { red: 23, green: 23, blue: 23, alpha: 255 } }
+  DrawText { baseline: Point { x: 264.7, y: 141.2 }, text: "Ctrl+Shift+S", font_family: "system-ui", font_size: 12.0, font_weight: FontWeight(400), font_slant: Upright, tracking: 1.2000000000000002, color: Color { red: 115, green: 115, blue: 115, alpha: 255 } }
+  DrawText { baseline: Point { x: 172.0, y: 141.9 }, text: "Save As", font_family: "system-ui", font_size: 14.0, font_weight: FontWeight(400), font_slant: Upright, tracking: 0.0, color: Color { red: 10, green: 10, blue: 10, alpha: 255 } }
+  DrawText { baseline: Point { x: 311.5, y: 173.2 }, text: "Alt+F4", font_family: "system-ui", font_size: 12.0, font_weight: FontWeight(400), font_slant: Upright, tracking: 1.2000000000000002, color: Color { red: 115, green: 115, blue: 115, alpha: 255 } }
+  DrawText { baseline: Point { x: 172.0, y: 173.9 }, text: "Close", font_family: "system-ui", font_size: 14.0, font_weight: FontWeight(400), font_slant: Upright, tracking: 0.0, color: Color { red: 10, green: 10, blue: 10, alpha: 255 } }
+  DrawText { baseline: Point { x: 264.7, y: 205.2 }, text: "Ctrl+Super+F", font_family: "system-ui", font_size: 12.0, font_weight: FontWeight(400), font_slant: Upright, tracking: 1.2000000000000002, color: Color { red: 115, green: 115, blue: 115, alpha: 255 } }
+  DrawText { baseline: Point { x: 172.0, y: 205.9 }, text: "Full Screen", font_family: "system-ui", font_size: 14.0, font_weight: FontWeight(400), font_slant: Upright, tracking: 0.0, color: Color { red: 10, green: 10, blue: 10, alpha: 255 } }
+  DrawText { baseline: Point { x: 249.1, y: 237.2 }, text: "Ctrl+K, Ctrl+G", font_family: "system-ui", font_size: 12.0, font_weight: FontWeight(400), font_slant: Upright, tracking: 1.2000000000000002, color: Color { red: 115, green: 115, blue: 115, alpha: 255 } }
+  DrawText { baseline: Point { x: 172.0, y: 237.9 }, text: "Go", font_family: "system-ui", font_size: 14.0, font_weight: FontWeight(400), font_slant: Upright, tracking: 0.0, color: Color { red: 10, green: 10, blue: 10, alpha: 255 } }
+  DrawText { baseline: Point { x: 303.7, y: 269.2 }, text: "Any key", font_family: "system-ui", font_size: 12.0, font_weight: FontWeight(400), font_slant: Upright, tracking: 1.2000000000000002, color: Color { red: 115, green: 115, blue: 115, alpha: 255 } }
+  DrawText { baseline: Point { x: 172.0, y: 269.9 }, text: "Note", font_family: "system-ui", font_size: 14.0, font_weight: FontWeight(400), font_slant: Upright, tracking: 0.0, color: Color { red: 10, green: 10, blue: 10, alpha: 255 } }
+  part 0 in None: Menu "" value None desc "" [] []
+  part 1 in Some(0): MenuItem "Save" value None desc "Ctrl+S" [focused selected=true] [Activate]
+  part 2 in Some(0): MenuItem "Save As" value None desc "Ctrl+Shift+S" [selected=false] [Activate]
+  part 3 in Some(0): MenuItem "Close" value None desc "Alt+F4" [selected=false] [Activate]
+  part 4 in Some(0): MenuItem "Full Screen" value None desc "Ctrl+Super+F" [selected=false] [Activate]
+  part 5 in Some(0): MenuItem "Go" value None desc "Ctrl+K, Ctrl+G" [selected=false] [Activate]
+  part 6 in Some(0): MenuItem "Note" value None desc "Any key" [selected=false] [Activate]
+# shortcut field Pc
+  DrawText { baseline: Point { x: 24.0, y: 32.2 }, text: "Ctrl+K", font_family: "system-ui", font_size: 12.0, font_weight: FontWeight(500), font_slant: Upright, tracking: 0.0, color: Color { red: 115, green: 115, blue: 115, alpha: 255 } }
+  DrawText { baseline: Point { x: 75.6, y: 32.2 }, text: "Ctrl+Shift+Space", font_family: "system-ui", font_size: 12.0, font_weight: FontWeight(500), font_slant: Upright, tracking: 0.0, color: Color { red: 115, green: 115, blue: 115, alpha: 255 } }
+  value Some("Ctrl+K, Ctrl+Shift+Space")
+# input editing Mac
+  Ctrl+Left: value "one two three" selection Some(13..13)
+  Alt+Left: value "one two three" selection Some(8..8)
+  Meta+Left: value "one two three" selection Some(0..0)
+  End: value "one two three" selection Some(13..13)
+  Ctrl+Shift+Left: value "one two three" selection Some(13..13)
+  Home: value "one two three" selection Some(0..0)
+  Shift+End: value "one two three" selection Some(0..13)
+  Right: value "one two three" selection Some(13..13)
+  Ctrl+Backspace: value "one two three" selection Some(13..13)
+  Alt+Backspace: value "one two " selection Some(8..8)
+  Meta+Backspace: value "" selection Some(0..0)
+  type: value "!" selection Some(1..1)
+  Ctrl+Z: value "!" selection Some(1..1)
+  Meta+Z: value "" selection Some(0..0)
+  Ctrl+Y: value "" selection Some(0..0)
+  Ctrl+Shift+Z: value "" selection Some(0..0)
+  Meta+Shift+Z: value "!" selection Some(1..1)
+  Ctrl+A: value "!" selection Some(1..1)
+  Meta+A: value "!" selection Some(0..1)
+# input editing Pc
+  Ctrl+Left: value "one two three" selection Some(8..8)
+  Alt+Left: value "one two three" selection Some(8..8)
+  Meta+Left: value "one two three" selection Some(8..8)
+  End: value "one two three" selection Some(13..13)
+  Ctrl+Shift+Left: value "one two three" selection Some(8..13)
+  Home: value "one two three" selection Some(0..0)
+  Shift+End: value "one two three" selection Some(0..13)
+  Right: value "one two three" selection Some(13..13)
+  Ctrl+Backspace: value "one two " selection Some(8..8)
+  Alt+Backspace: value "one two " selection Some(8..8)
+  Meta+Backspace: value "one two " selection Some(8..8)
+  type: value "one two !" selection Some(9..9)
+  Ctrl+Z: value "one two " selection Some(8..8)
+  Meta+Z: value "one two " selection Some(8..8)
+  Ctrl+Y: value "one two !" selection Some(9..9)
+  Ctrl+Shift+Z: value "one two !" selection Some(9..9)
+  Meta+Shift+Z: value "one two !" selection Some(9..9)
+  Ctrl+A: value "one two !" selection Some(0..9)
+  Meta+A: value "one two !" selection Some(0..9)
+# textarea editing Mac
+  Ctrl+End: value "first line\nsecond line" selection Some(0..0)
+  Meta+Down: value "first line\nsecond line" selection Some(22..22)
+  Home: value "first line\nsecond line" selection Some(11..11)
+  Ctrl+Home: value "first line\nsecond line" selection Some(11..11)
+  Alt+Home: value "first line\nsecond line" selection Some(0..0)
+  Ctrl+Shift+End: value "first line\nsecond line" selection Some(0..0)
+  Meta+Shift+Down: value "first line\nsecond line" selection Some(0..22)
+  Right: value "first line\nsecond line" selection Some(22..22)
+  Ctrl+Backspace: value "first line\nsecond line" selection Some(22..22)
+  Alt+Backspace: value "first line\nsecond " selection Some(18..18)
+# textarea editing Pc
+  Ctrl+End: value "first line\nsecond line" selection Some(22..22)
+  Meta+Down: value "first line\nsecond line" selection Some(22..22)
+  Home: value "first line\nsecond line" selection Some(11..11)
+  Ctrl+Home: value "first line\nsecond line" selection Some(0..0)
+  Alt+Home: value "first line\nsecond line" selection Some(0..0)
+  Ctrl+Shift+End: value "first line\nsecond line" selection Some(0..22)
+  Meta+Shift+Down: value "first line\nsecond line" selection Some(0..22)
+  Right: value "first line\nsecond line" selection Some(22..22)
+  Ctrl+Backspace: value "first line\nsecond " selection Some(18..18)
+  Alt+Backspace: value "first line\nsecond " selection Some(18..18)

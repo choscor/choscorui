@@ -11,8 +11,10 @@
 //! tests use, so a control added there is pinned here too. The
 //! `painted_slots` module pins the default recipe of every control kind,
 //! the `semantic_states` module pins the child parts of hosted controls
-//! in states that the catalog samples do not reach, and the `views`
-//! module pins views mounted through the compose `ViewHost`.
+//! in states that the catalog samples do not reach, the `views` module
+//! pins views mounted through the compose `ViewHost`, and the
+//! `key_conventions` module pins the shortcut labels and the editing keys
+//! of each keyboard convention.
 
 use choscorui::controls::{
     Alert, AlertVariant, Avatar, Badge, BadgeVariant, Bubble, BubbleVariant, Button, ButtonVariant,
@@ -34,6 +36,8 @@ use std::path::PathBuf;
 
 #[path = "../../choscorui-controls/tests/catalog/mod.rs"]
 mod catalog;
+#[path = "compatibility/key_conventions.rs"]
+mod key_conventions;
 #[path = "compatibility/painted_slots.rs"]
 mod painted_slots;
 #[path = "compatibility/painted_text.rs"]
@@ -322,6 +326,14 @@ fn write_parts(out: &mut String, parts: &SemanticParts) {
         )
         .unwrap();
     }
+}
+
+/// The shortcut labels and the editing keys on `Mac` and on `Pc`.
+#[test]
+fn key_conventions() {
+    let mut out = String::new();
+    key_conventions::record(&mut out);
+    golden("key_conventions", &out);
 }
 
 /// Views mounted through the compose `ViewHost`: modifier order, and a

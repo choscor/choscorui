@@ -56,6 +56,8 @@ On a target without a backend, `App::start` and `App::run` return `AppError::Uns
 
 `views.txt` records views that the compose `ViewHost` mounts without a window, with `EstimatedText`. For `padding` then `background`, and for the reverse order, it records the bounds of each node and the display list. It also records the bounds of each node of a stack and of a `Form`, under the `en` and `ar` locales.
 
+`key_conventions.txt` records the same keys and labels on `KeyConvention::Mac` and on `KeyConvention::Pc`. It records the shortcut labels of an open context menu and of a shortcut field. It also records the value and the selection of an input and a text area after each editing key.
+
 The `painted_<group>.txt` files pin the default recipe of each `ControlKind`, with one file for each recipe group. For each kind, variant, size, and slot, the general slot painter paints a box, an icon, and a label. The file records the `rest` paint, and each key state that paints differently. A list names the states that paint the same as `rest`. A size shows only if it paints differently from `default`. Slots with equal styles in all cases share one record.
 
 To accept an intended change, do these steps:
