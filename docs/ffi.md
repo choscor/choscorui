@@ -242,6 +242,35 @@ The native smoke tests create real windows, so they run only when `CHOSCORUI_RUN
 
 The tests check window construction, title, visibility, resize, scale, and close events. They also check event isolation between two windows, posted work, timers, input translation, scroll units, `drawRect:` calls, panic containment, and loop stop.
 
+## Linux Wayland and text
+
+`src/ffi/wayland/` loads libwayland-client, and `src/ffi/cairo/` loads libcairo, through `libraries!`. The safe `Connection`, `Proxy`, and `FontFace` types are the only callers.
+
+- **Wayland dispatcher.** The `wayland dispatcher` callback is the dispatcher of each proxy. It copies the event into an owned `Event` and queues it on the connection. The client handles the queue after libwayland returns, so no Rust handler runs inside libwayland.
+- **Dispatcher data.** The dispatcher data is the `Display` of the connection, and each proxy holds it through an `Rc`. The callback takes one more strong count for its duration.
+- **Proxies.** A `Proxy` destroys its object with the destructor request, or with `wl_proxy_destroy`. A buffer that libwayland-cursor owns is not destroyed by its `Proxy`.
+- **Font faces.** The `cairo font face destroy` callback releases the FreeType face that a Cairo font face holds. Cairo calls it one time, when it frees the font face.
+- **Callbacks.** A panic in either callback is caught. The dispatcher returns 0, and the face release returns without a release.
+- **Threads.** All Wayland calls run on the UI thread that owns the `Application`.
+- **Tests.** The binding check compiles each declaration, struct, and constant against the headers. `tests/window_smoke.rs` opens, paints, and closes windows on sway.
+
+## Linux D-Bus
+
+`src/ffi/dbus/` loads libdbus-1 through `libraries!`. The safe `Connection` type owns one private connection for the thread that made it.
+
+- **Callbacks.** These callbacks only queue work, and `dispatch` runs the handlers after libdbus returns. Thus, a handler can call the connection again.
+  - `D-Bus add watch`, `D-Bus remove watch`, and `D-Bus toggle watch` keep the list of descriptors that the event loop waits on.
+  - `D-Bus add timeout`, `D-Bus remove timeout`, and `D-Bus toggle timeout` keep the list of timers.
+  - `D-Bus filter` queues each signal for the subscriptions that match it.
+  - `D-Bus object path handler` queues a method call for an exported object.
+  - `D-Bus pending call notify` queues the reply of a call.
+  - `D-Bus free function` and `D-Bus object path unregister` free the data of the connection state, of a pending call, and of an export.
+- **Panics.** A panic in a callback is caught. An add callback then returns 0, and the filter and the handler return `DBUS_HANDLER_RESULT_NOT_YET_HANDLED`.
+- **Ownership.** The callback data is a `Box` or an `Rc` that `into_raw` gives to libdbus. libdbus frees it one time, through the free function or the unregister callback.
+- **Messages.** A borrowed message lives only for the callback. A queued message holds its own reference, and its drop calls `dbus_message_unref`.
+- **Disconnect.** The connection does not exit the process on disconnect. Its drop closes the connection and then gives back the last reference.
+- **Tests.** `tests/services.rs` runs each desktop service against fake services on a private session bus.
+
 ## Linux image codecs
 
 `choscorui-linux` loads the codec libraries with `dlopen` through `libraries!` in `src/ffi/codecs/`. Each format has one module with a safe decoder. The format detection, the EXIF orientation, and the pixel conversion are in `src/imaging.rs`, outside `ffi`.
