@@ -1,6 +1,6 @@
 [package]
 name = "choscorui"
-version = "0.1.0"
+version = "0.2.0"
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
@@ -17,15 +17,15 @@ targets = [
 ]
 
 [dependencies]
-choscorui-compose = { path = "../choscorui-compose", version = "0.1.0" }
-choscorui-controls = { path = "../choscorui-controls", version = "0.1.0" }
-choscorui-core = { path = "../choscorui-core", version = "0.1.0" }
+choscorui-compose = { path = "../choscorui-compose", version = "0.2.0" }
+choscorui-controls = { path = "../choscorui-controls", version = "0.2.0" }
+choscorui-core = { path = "../choscorui-core", version = "0.2.0" }
 
 [target.'cfg(target_os = "macos")'.dependencies]
-choscorui-macos = { path = "../choscorui-macos", version = "0.1.0" }
+choscorui-macos = { path = "../choscorui-macos", version = "0.2.0" }
 
 [target.'cfg(target_os = "linux")'.dependencies]
-choscorui-linux = { path = "../choscorui-linux", version = "0.1.0" }
+choscorui-linux = { path = "../choscorui-linux", version = "0.2.0" }
 
 [target.'cfg(any(target_os = "macos", target_os = "linux"))'.dev-dependencies]
 choscorui-render = { path = "../choscorui-render" }

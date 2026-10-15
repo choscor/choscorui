@@ -4,7 +4,7 @@ version = 4
 
 [[package]]
 name = "choscorui"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "choscorui-compose",
  "choscorui-controls",
@@ -16,11 +16,11 @@ dependencies = [
 
 [[package]]
 name = "choscorui-api-docs"
-version = "0.1.0"
+version = "0.2.0"
 
 [[package]]
 name = "choscorui-bench"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "choscorui-compose",
  "choscorui-controls",
@@ -31,7 +31,7 @@ dependencies = [
 
 [[package]]
 name = "choscorui-compose"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "choscorui-controls",
  "choscorui-core",
@@ -39,50 +39,49 @@ dependencies = [
 
 [[package]]
 name = "choscorui-controls"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "choscorui-core",
 ]
 
 [[package]]
 name = "choscorui-core"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "unicode-segmentation",
 ]
 
 [[package]]
 name = "choscorui-gallery"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "choscorui",
- "choscorui-linux",
 ]
 
 [[package]]
 name = "choscorui-linux"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "choscorui-core",
 ]
 
 [[package]]
 name = "choscorui-macos"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "choscorui-core",
 ]
 
 [[package]]
 name = "choscorui-render"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "choscorui-core",
 ]
 
 [[package]]
 name = "choscorui-windows"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "choscorui-core",
 ]
