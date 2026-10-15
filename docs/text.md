@@ -40,7 +40,7 @@ no state, so a `static` can hold it. HarfBuzz shapes the text on FreeType
 faces, and fontconfig chooses the faces:
 
 - **Families:** fontconfig matches the family, weight, slant, and locale.
-  `system-ui` is the desktop font that the backend gives to
+  `system-ui` is the desktop font that the application gives to
   `set_desktop_font`, else `sans-serif`. `ui-monospace` is `monospace`.
 - **Fallback:** each grapheme cluster uses the first face that has all its
   characters. The order is the primary face, the `fallback` families, and

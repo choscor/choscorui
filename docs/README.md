@@ -23,7 +23,7 @@ The generated [API reference](../api-docs/README.md) gives each type, method, an
 2. [ffi.md](ffi.md): the safety record for each FFI boundary.
 3. [performance.md](performance.md): benchmarks, budgets, and reliability checks.
 4. [platform-windows.md](platform-windows.md): the Windows backend crate. It is not supported.
-5. [platform-linux.md](platform-linux.md): the Linux backend crate. It is not supported.
+5. [platform-linux.md](platform-linux.md): the Linux backend on Wayland and X11.
 6. [releasing.md](releasing.md): the release procedure.
 7. [licenses.md](licenses.md): the license audit.
 
