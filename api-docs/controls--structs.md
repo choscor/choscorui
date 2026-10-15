@@ -327,3 +327,85 @@ pub fn new<M, N>(name: impl IntoLive<TextContent, M>, titles: impl Items<String>
 
 A stack named `name` with a page for each of `titles`, which shows
 page `current`, made by `page`.
+
+## `TitleBarHandle`
+
+struct in `choscorui::controls::TitleBarHandle`
+
+```rust
+pub struct TitleBarHandle(/* private field */);
+```
+
+The state that a window shares with its `TitleBar`: the title, the
+maximized and active flags, and the queue of requests. Clones share
+one state. A change shows at the next
+`ControlHost::advance`.
+
+### Methods
+
+#### `TitleBarHandle::is_active`
+
+```rust
+pub fn is_active(&self) -> bool
+```
+
+True when the window is the active window.
+
+#### `TitleBarHandle::is_maximized`
+
+```rust
+pub fn is_maximized(&self) -> bool
+```
+
+True when the window is maximized.
+
+#### `TitleBarHandle::new`
+
+```rust
+pub fn new() -> Self
+```
+
+The state of an active window that is not maximized.
+
+#### `TitleBarHandle::set_active`
+
+```rust
+pub fn set_active(&self, active: bool)
+```
+
+Records whether the window is the active window. An inactive
+window shows a muted title and a smaller shadow.
+
+#### `TitleBarHandle::set_maximized`
+
+```rust
+pub fn set_maximized(&self, maximized: bool)
+```
+
+Records whether the window is maximized. The maximize button then
+restores, and the frame loses its corners and its shadow.
+
+#### `TitleBarHandle::set_title`
+
+```rust
+pub fn set_title(&self, title: impl Into<String>)
+```
+
+Shows `title` in the title bar.
+
+#### `TitleBarHandle::take_requests`
+
+```rust
+pub fn take_requests(&self) -> Vec<TitleBarRequest>
+```
+
+The requests since the last call, oldest first. The backend acts
+on each one.
+
+#### `TitleBarHandle::title`
+
+```rust
+pub fn title(&self) -> String
+```
+
+The window title.

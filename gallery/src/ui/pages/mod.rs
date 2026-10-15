@@ -3,6 +3,7 @@
 use crate::ui::page::Build;
 
 pub mod chat;
+pub mod chrome;
 pub mod containers;
 pub mod data;
 pub mod datetime;
@@ -32,8 +33,9 @@ mod variants;
 
 /// The view of catalog page `id`, when it has one.
 pub fn find(id: &str) -> Option<Build> {
-    let groups: [fn(&str) -> Option<Build>; 21] = [
+    let groups: [fn(&str) -> Option<Build>; 22] = [
         chat::page,
+        chrome::page,
         containers::page,
         data::page,
         datetime::page,

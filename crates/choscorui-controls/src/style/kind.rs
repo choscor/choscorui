@@ -97,6 +97,7 @@ named_enum! {
         SizeGrip => "size-grip",
         Canvas => "canvas",
         TextEditor => "text-editor",
+        TitleBar => "title-bar",
     }
 }
 

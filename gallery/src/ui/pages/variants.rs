@@ -287,6 +287,11 @@ fn expectations() -> Vec<Expect> {
             sizes: &[ControlSize::Default, ControlSize::Lg],
             ..expect("command", K::Command)
         },
+        Expect {
+            // Checked is the maximized window, and focused the active one.
+            states: &[S::CHECKED, S::FOCUSED],
+            ..expect("title-bar", K::TitleBar)
+        },
     ]
 }
 

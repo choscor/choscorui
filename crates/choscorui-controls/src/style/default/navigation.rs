@@ -15,6 +15,7 @@ pub(super) fn resolve(cx: &Cx) -> ResolvedStyle {
         ControlKind::Pagination => pagination(cx),
         ControlKind::NavigationMenu => navigation_menu(cx),
         ControlKind::Sidebar => sidebar(cx),
+        ControlKind::TitleBar => title_bar(cx),
         _ => chrome(cx),
     }
 }
@@ -470,6 +471,73 @@ fn chrome(cx: &Cx) -> ResolvedStyle {
             style.border_sides = Sides::BOTTOM;
             style.min_height = cx.sp(10.0);
             style.padding = Edges::axes(cx.sp(2.0), cx.sp(1.0));
+            style.gap = cx.sp(1.0);
+            style
+        }
+    }
+}
+
+/// The title bar and the frame that a window draws without server-side
+/// decorations. They have no reference counterpart: they take the
+/// background, border, and muted roles. The `focused` state of the
+/// `Title` and `Panel` slots is the active window, and the `checked`
+/// state of the `Root` and `Panel` slots is the maximized window.
+fn title_bar(cx: &Cx) -> ResolvedStyle {
+    let s = cx.s();
+    // A maximized window fills the screen, so it has square corners.
+    let radius = if s.checked() {
+        0.0
+    } else {
+        cx.r(RadiusScale::Lg)
+    };
+    match cx.q.slot {
+        Slot::Title => {
+            let role = if s.focused() {
+                ColorRole::Foreground
+            } else {
+                ColorRole::MutedForeground
+            };
+            text(cx, role, TextSize::Sm, FontWeight::SEMIBOLD)
+        }
+        Slot::Action | Slot::Close => {
+            let mut style = super::form::button(cx, ButtonVariant::Ghost, ControlSize::IconSm);
+            style.min_width = cx.sp(7.0);
+            style.min_height = cx.sp(7.0);
+            if cx.q.slot == Slot::Close && s.interactive_hover() {
+                style.background = cx.a(ColorRole::Destructive, cx.pick(0.1, 0.2)).into();
+                style.foreground = cx.c(ColorRole::Destructive);
+            }
+            style
+        }
+        Slot::Panel => {
+            let mut style = cx.base();
+            style.background = cx.c(ColorRole::Background).into();
+            style.border = cx.c(ColorRole::Border);
+            style.border_width = cx.t.border_width;
+            style.radius = Corners::all(radius);
+            style.shadow = if s.checked() {
+                choscorui_core::ShadowLayers::NONE
+            } else if s.focused() {
+                cx.shadow(ShadowScale::Xl)
+            } else {
+                cx.shadow(ShadowScale::Md)
+            };
+            style
+        }
+        _ => {
+            let mut style = cx.base();
+            style.background = cx.c(ColorRole::Background).into();
+            style.border = cx.c(ColorRole::Border);
+            style.border_width = cx.t.border_width;
+            style.border_sides = Sides::BOTTOM;
+            style.radius = Corners {
+                top_start: radius,
+                top_end: radius,
+                bottom_end: 0.0,
+                bottom_start: 0.0,
+            };
+            style.min_height = cx.sp(10.0);
+            style.padding = Edges::axes(cx.sp(1.5), cx.sp(1.5));
             style.gap = cx.sp(1.0);
             style
         }

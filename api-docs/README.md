@@ -177,6 +177,9 @@ Every example assumes `use choscorui::prelude::*;`.
 - [`TextEditor`](controls--type-aliases-2.md#texteditor) type alias: A multiline plain-text editor that edits `value`.
 - [`TextField`](controls--type-aliases-2.md#textfield) type alias: A single-line text field that edits `value`.
 - [`Textarea`](controls--type-aliases-2.md#textarea) type alias: A multiline text input that edits `value`.
+- [`TitleBar`](controls--type-aliases-2.md#titlebar) type alias: The title bar of a window that draws its own frame: the title and the minimize, maximize, and close buttons.
+- [`TitleBarHandle`](controls--structs.md#titlebarhandle) struct: The state that a window shares with its `TitleBar`: the title, the maximized and active flags, and the queue of requests.
+- [`TitleBarRequest`](controls--enums.md#titlebarrequest) enum: What a title bar asks the backend to do with its window.
 - [`Toggle`](controls--type-aliases-2.md#toggle) type alias: A button that stays on or off and edits `on`.
 - [`ToggleGroup`](controls--type-aliases-2.md#togglegroup) type alias: A row of toggles.
 - [`ToolBox`](controls--type-aliases-2.md#toolbox) type alias: Pages under stacked headers, with one page open; `open` edits the index of the open page.

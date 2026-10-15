@@ -11,7 +11,7 @@ use choscorui_controls::{
     RadioGroup, Resizable, ScrollArea, ScrollBar, ScrollOrientation, Select, Separator,
     SeparatorOrientation, SheetSide, SizeGrip, Slider, SliderOrientation, SpinBox,
     SplitOrientation, StackedContainer, StatusBar, Tabs, TextEditor, TextField, TextItemDelegate,
-    ToolBox, ToolButton, Toolbar, ToolbarItem,
+    TitleBar, TitleBarHandle, ToolBox, ToolButton, Toolbar, ToolbarItem,
 };
 use choscorui_core::{
     CivilDate, CivilDateTime, CivilTime, Color, ItemKey, ItemShape, ItemStyle, Locale, Point, Rect,
@@ -280,5 +280,8 @@ pub fn builtins() -> Vec<(&'static str, TreeFactory)> {
         }),
         ("text-editor", |_| Box::new(TextEditor::new("Notes", "Hi"))),
         ("canvas", canvas),
+        ("title-bar", |_| {
+            Box::new(TitleBar::new("Notes", TitleBarHandle::new()))
+        }),
     ]
 }

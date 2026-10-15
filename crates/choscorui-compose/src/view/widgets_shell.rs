@@ -1,5 +1,5 @@
-//! View constructors for window parts: toolbars, status bars, docks, and
-//! size grips. Like the views in `widgets`, each takes its content, a
+//! View constructors for window parts: toolbars, status bars, docks,
+//! size grips, and title bars. Like the views in `widgets`, each takes its content, a
 //! `Binding` where the control edits a value, and an action where it
 //! fires one.
 
@@ -11,7 +11,8 @@ use super::text::TextContent;
 use super::widgets::{Items, label, text};
 use choscorui_controls as controls;
 use choscorui_controls::{
-    ControlKind, ControlMessage, ControlValue, DockLayout, StatusSection, ToolbarArea, ToolbarItem,
+    ControlKind, ControlMessage, ControlValue, DockLayout, StatusSection, TitleBarHandle,
+    ToolbarArea, ToolbarItem,
 };
 use choscorui_core::Size;
 
@@ -158,6 +159,37 @@ impl Configured<controls::SizeGrip> {
             if let ControlMessage::Changed(ControlValue::Range(width, height)) = message {
                 on_resize(Size::new(*width, *height));
             }
+        })
+    }
+}
+
+/// The title bar of a window that draws its own frame: the title and the
+/// minimize, maximize, and close buttons. The bar puts each window
+/// request in `handle` and then reports `Activated`, so `.on_activate`
+/// takes the requests with [`TitleBarHandle::take_requests`]. The window
+/// sets the maximized and active states through the handle.
+///
+/// # Examples
+///
+/// ```
+/// # use choscorui_compose::view::*;
+/// # use choscorui_controls::TitleBarHandle;
+/// let handle = TitleBarHandle::new();
+/// let requests = handle.clone();
+/// let bar = TitleBar::new("Notes", handle).on_activate(move || {
+///     for request in requests.take_requests() {
+///         println!("{request:?}");
+///     }
+/// });
+/// ```
+pub type TitleBar = Configured<controls::TitleBar>;
+
+impl Configured<controls::TitleBar> {
+    /// A title bar that shows `title` and shares the window state through `handle`.
+    pub fn new<M>(title: impl IntoLive<TextContent, M>, handle: TitleBarHandle) -> Self {
+        let title = label(title);
+        Configured::custom(ControlKind::TitleBar, move |env| {
+            controls::TitleBar::new(text(&title, env), handle.clone())
         })
     }
 }

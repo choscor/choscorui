@@ -85,7 +85,7 @@ pub use widgets_hosted::{
     AlertDialog, AvatarGroup, CommandLink, DropdownMenu, FontChooser, ScrollBar, Toaster, ToolBox,
     ToolButton,
 };
-pub use widgets_shell::{Dock, SizeGrip, StatusBar, Toolbar};
+pub use widgets_shell::{Dock, SizeGrip, StatusBar, TitleBar, Toolbar};
 
 /// A piece of user interface. A component implements [`View::body`] and
 /// returns other views; the toolkit's primitive views (stacks, text,

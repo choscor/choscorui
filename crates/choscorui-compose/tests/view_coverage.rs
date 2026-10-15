@@ -16,8 +16,8 @@ use choscorui_compose::view::{
     KeySequenceEdit, Label, List, Marker, Menubar, Message, MessageScroller, NavigationMenu,
     NumericDisplay, Pagination, Popover, Progress, Questionnaire, RadioGroup, RangeSlider,
     Resizable, ScrollBar, ScrollView, Select, Sidebar, SizeGrip, Skeleton, Slider, SpinBox,
-    Spinner, StackedContainer, StatusBar, Switch, Tabs, TextEditor, TextField, Textarea, Toaster,
-    Toggle, ToggleGroup, ToolBox, ToolButton, Toolbar,
+    Spinner, StackedContainer, StatusBar, Switch, Tabs, TextEditor, TextField, Textarea, TitleBar,
+    Toaster, Toggle, ToggleGroup, ToolBox, ToolButton, Toolbar,
 };
 use std::any::type_name;
 use std::collections::BTreeSet;
@@ -103,6 +103,7 @@ const VIEWS: &[(&str, ViewName)] = &[
     ("spinner", type_name::<Spinner>),
     ("stack", type_name::<StackedContainer<fn(usize) -> Empty>>),
     ("status-bar", type_name::<StatusBar>),
+    ("title-bar", type_name::<TitleBar>),
     ("switch", type_name::<Switch>),
     ("tabs", type_name::<Tabs>),
     ("text-editor", type_name::<TextEditor>),

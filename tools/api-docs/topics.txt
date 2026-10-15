@@ -160,6 +160,9 @@ controls choscorui::prelude::Textarea
 controls choscorui::prelude::Toggle
 controls choscorui::prelude::ToggleGroup
 controls choscorui::prelude::Toolbar
+controls choscorui::prelude::TitleBar
+controls choscorui::controls::TitleBarHandle
+controls choscorui::controls::TitleBarRequest
 controls choscorui::prelude::ControlKind
 controls choscorui::prelude::AvatarGroup
 controls choscorui::prelude::CommandLink

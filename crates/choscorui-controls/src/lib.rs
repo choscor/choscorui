@@ -120,6 +120,11 @@ pub use menu::HostedDropdownMenu;
 pub use model_widgets::HostedColumnBrowser;
 pub use shell::HostedToolbar;
 mod calendar_caption;
+mod chrome;
+pub use chrome::{
+    ResizeEdge, TitleBar, TitleBarButton, TitleBarHandle, TitleBarRequest, WindowFrame,
+    WindowRegion,
+};
 mod custom;
 mod data;
 mod editing;

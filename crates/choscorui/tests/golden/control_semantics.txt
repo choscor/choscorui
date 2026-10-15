@@ -654,6 +654,14 @@ canvas Ltr: role List name "Diagram" value None state SemanticState { disabled: 
 canvas Rtl: role List name "Diagram" value None state SemanticState { disabled: false, checked: None, selected: None, expanded: None, read_only: false, invalid: false, hidden: false } actions [Focus]
   part 0 in None: Button "Box 0" value None desc "" [selected=false item=0] [Focus, Activate]
   part 1 in None: Button "Box 1" value None desc "" [selected=false item=1] [Focus, Activate]
+title-bar Ltr: role Toolbar name "Notes" value None state SemanticState { disabled: false, checked: None, selected: None, expanded: None, read_only: false, invalid: false, hidden: false } actions [ShowMenu, Focus]
+  part 0 in None: Button "Minimize" value None desc "" [focused] [Activate]
+  part 1 in None: Button "Maximize" value None desc "" [] [Activate]
+  part 2 in None: Button "Close" value None desc "" [] [Activate]
+title-bar Rtl: role Toolbar name "Notes" value None state SemanticState { disabled: false, checked: None, selected: None, expanded: None, read_only: false, invalid: false, hidden: false } actions [ShowMenu, Focus]
+  part 0 in None: Button "Minimize" value None desc "" [focused] [Activate]
+  part 1 in None: Button "Maximize" value None desc "" [] [Activate]
+  part 2 in None: Button "Close" value None desc "" [] [Activate]
 dialog with buttons: role Button name "Edit" value None desc "" state SemanticState { disabled: false, checked: None, selected: None, expanded: Some(false), read_only: false, invalid: false, hidden: false }
   open:
   part 0 in None: Button "Cancel" value None desc "" [] [Activate]

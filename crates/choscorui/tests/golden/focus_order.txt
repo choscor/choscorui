@@ -94,6 +94,9 @@ text-editor
 canvas
 canvas (inside)
 canvas (inside)
+title-bar
+title-bar (inside)
+title-bar (inside)
 switch
 toggle
 toggle-group
@@ -175,8 +178,10 @@ color-picker
 decimal-spin-box
 scroll-bar
 key-sequence-edit
-text-editor
 # backward
+title-bar
+title-bar (inside)
+title-bar (inside)
 canvas
 canvas (inside)
 canvas (inside)
@@ -265,6 +270,9 @@ select
 toggle-group
 toggle
 switch
+title-bar
+title-bar (inside)
+title-bar (inside)
 canvas
 text-editor
 key-sequence-edit
@@ -343,10 +351,6 @@ date-picker
 input-otp
 textarea
 input-group
-input
-select
-toggle-group
-toggle
 # every hosted control Rtl
 # forward
 switch
@@ -437,6 +441,9 @@ text-editor
 canvas
 canvas (inside)
 canvas (inside)
+title-bar
+title-bar (inside)
+title-bar (inside)
 switch
 toggle
 toggle-group
@@ -518,8 +525,10 @@ color-picker
 decimal-spin-box
 scroll-bar
 key-sequence-edit
-text-editor
 # backward
+title-bar
+title-bar (inside)
+title-bar (inside)
 canvas
 canvas (inside)
 canvas (inside)
@@ -608,6 +617,9 @@ select
 toggle-group
 toggle
 switch
+title-bar
+title-bar (inside)
+title-bar (inside)
 canvas
 text-editor
 key-sequence-edit
@@ -686,7 +698,3 @@ date-picker
 input-otp
 textarea
 input-group
-input
-select
-toggle-group
-toggle

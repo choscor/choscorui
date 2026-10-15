@@ -82,6 +82,8 @@ to a control. [`Field`](#field-and-fieldtext) and the compose
 | Window chrome | [`DockLayout`](#docklayout) | Dockable panels around a central area. |
 | Window chrome | [`FocusFrame`](#focusframe-and-sizegrip) | Focus ring outside the focused node. |
 | Window chrome | [`SizeGrip`](#focusframe-and-sizegrip) | Window resize grip. |
+| Window chrome | [`TitleBar`](#titlebar-and-windowframe) | Drawn title bar of a window without server-side decorations. |
+| Window chrome | [`WindowFrame`](#titlebar-and-windowframe) | Hit test and frame of a window with client-side decorations. |
 | Canvas | [`CanvasView`](#canvasview) | Interactive view of a `Scene`. |
 | Validators | [`NumberInput`](#numberinput-inputmask-and-dateinput) | Locale-aware number validation. |
 | Validators | [`InputMask`](#numberinput-inputmask-and-dateinput) | Fixed-format text mask. |
@@ -189,6 +191,7 @@ changes as `ControlMessage` values:
 | `DateTimeEdit` | `Changed(Date)` for a date, `Changed(Text)` for a time or a date and time | the same kind |
 | `HostedDropdownMenu` | `Command(id)`, `Dismissed` | - |
 | `HostedAlertDialog` | `ItemActivated(button)`, `OpenChanged(false)`, `Dismissed` | - |
+| `TitleBar` | `Activated` after each request that it queues | - |
 | `ColorPicker` | `Changed(Text)` with the hex value, then `Changed(Channels)` with the hue, saturation, value, and alpha; `Activated` on Enter | `Text` with a hex value |
 | `HostedToolbar` | `Command(id)`, `OpenChanged` for the overflow menu, `ItemActivated(index)` for an overflowed embedded control | - |
 | `DockLayout` | `ItemActivated(panel)` on a tab, `Changed(Number)` on a splitter, `Changed(Text)` with the saved layout after a tab drop, `Dismissed` when a panel closes | - |
@@ -2787,6 +2790,79 @@ timed message, call `request_message` in `.with_env`, and clear the state
 that asks for it in `.on_dismiss`.
 
 [shell.rs](../crates/choscorui-controls/tests/shell.rs) pins this behavior.
+
+### TitleBar and WindowFrame
+
+A window without server-side decorations draws its own frame. `TitleBar`
+draws the title and the window buttons, and `WindowFrame` finds the part
+of the window under a point.
+
+- **Requests.** `TitleBar::new(title, handle)` puts `TitleBarRequest`
+  values in its `TitleBarHandle`. The backend takes them with
+  `take_requests` and runs them.
+- Each request also reports `Activated`. A host that reads messages
+  knows when to take the requests.
+- A primary press and a drag past the drag threshold on the title request
+  `Move`. A double click requests `ToggleMaximize`.
+- A secondary press requests `ShowWindowMenu` at the pointer.
+- A window button requests `Minimize`, `ToggleMaximize`, or `Close` when
+  the press and the release land on it.
+- **Window state.** The backend sets the title, the maximized state, and
+  the active state through the handle. The bar shows each change at its
+  next timer.
+- A maximized window shows Restore in place of Maximize.
+  `with_buttons` keeps only some buttons, for example only Close for a
+  dialog window.
+- **Keys.** Each window button is a tab stop. Enter, or Space on its
+  release, runs the focused button.
+- Shift+F10 or the Menu key requests the window menu at the bar.
+- **Layout.** The buttons sit at the end of the bar, with Close last.
+  Right-to-left layouts mirror the row, so the buttons sit at the left.
+- `TitleBar::height` gives the bar height, and `TitleBar::button_rects`
+  gives the button rectangles from the recipe.
+- **Hit test.** `WindowFrame::new(frame, title_bar, buttons)` takes the
+  visible window, the title bar, and the button rectangles.
+  `with_resize_edges(outer, inner)` adds the resize band.
+- `region(point)` returns a `WindowRegion`. A point is `Outside`, on the
+  resize band of a `ResizeEdge`, on a window button, on the title bar, or
+  in the client area.
+- The resize band wins over the other regions. A corner reaches one band
+  width along its two sides.
+- A maximized frame has no resize band. `WindowRegion::press_request`
+  gives the `Resize` request that a primary press in the band starts.
+- `ResizeEdge` names physical edges. Right-to-left layouts do not mirror
+  them.
+- **Look.** `paint` uses the `TitleBar` recipe. The focused state of the
+  `Title` slot is the active window, and the checked state is the
+  maximized window.
+- `WindowFrame::paint` draws the background, the border, and the shadow
+  of the window from the `Panel` slot. Paint it before the content.
+
+| Part | Slot | Value |
+| --- | --- | --- |
+| Bar | `Root` | 40 pt high, `background` fill, 1 pt `border` below, top corners radius lg (square while maximized), padding 6 pt, 4 pt gap |
+| Title | `Title` | sm semibold text: `foreground` in the active window, `muted-foreground` in an inactive window |
+| Minimize, maximize | `Action` | 28 pt ghost icon-sm button |
+| Close | `Close` | 28 pt ghost icon-sm button; on hover a `destructive` tint (10% light, 20% dark) and `destructive` text |
+| Window frame | `Panel` | `background` fill, 1 pt `border`, radius lg; shadow xl while active, md while inactive; no radius or shadow while maximized |
+
+| Field | `TitleBar::semantics` |
+| --- | --- |
+| Role | `Toolbar` (AXToolbar) |
+| Name / value | title / - |
+| State | - |
+| Actions | `ShowMenu`, `Focus` |
+
+The title bar publishes a `Button` part for each window button. The names
+are the built-in `choscorui.titlebar.minimize`, `choscorui.titlebar.maximize`
+or `choscorui.titlebar.restore`, and `choscorui.titlebar.close` messages.
+The focused button is the focused part.
+
+**As a view.** `TitleBar::new(title, handle)` of `choscorui-compose`
+mounts the bar. Take the requests from the handle in `.on_activate`.
+
+[chrome.rs](../crates/choscorui-controls/tests/chrome.rs) pins this
+behavior.
 
 ### DockLayout
 
