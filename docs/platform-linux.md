@@ -26,7 +26,7 @@ The release gallery links only `libc`, `libm`, and `libgcc_s` (`ldd target/relea
 | libxkbcommon-x11 | `libxkbcommon-x11.so.0` | The X11 keymap from XKB | The X11 keyboard has no keymap |
 | libxcb-xkb, libxcb-xinput, libxcb-shm, libxcb-randr, libxcb-render, libxcb-cursor | `.so.1` for xcb-xkb, `.so.0` for the others | The [X11 extensions](#x11-extensions) | The client uses the fallback of each extension |
 | libX11 | `libX11.so.6` | XIM input methods, and the EGL display on X11 without `EGL_EXT_platform_xcb` | No input method on X11 |
-| libxcb-xtest | `libxcb-xtest.so.0` | `Window::simulate_pointer`, for tests | The call returns `Error::Library` |
+| libxcb-xtest | `libxcb-xtest.so.0` | `Window::simulate_pointer` and `Window::simulate_key`, for tests | The call returns `Error::Library` |
 | libdbus-1 | `libdbus-1.so.3` | [Desktop services](#desktop-integration) and [accessibility](#accessibility) | No D-Bus services and no AT-SPI bridge |
 | libcanberra | `libcanberra.so.0` | The [alert sound](#alert-sound) when the display server has no bell | No sound |
 | libpng16, libturbojpeg | `libpng16.so.16`, `libturbojpeg.so.0` | PNG and JPEG [images](#image-codecs) | `image_codecs` is `Unsupported` |
@@ -63,7 +63,7 @@ The X11 client needs only the core protocol. It uses these extensions when the s
 | MIT-SHM | Shared images for the paint | `PutImage` in parts |
 | RandR | The rectangles and the physical sizes of the monitors, and their change events | The root window is the only screen, with the physical size of the screen |
 | RENDER | Cursors from images | The arrow shows |
-| XTEST | `Window::simulate_pointer`, for tests | The call fails |
+| XTEST | `Window::simulate_pointer` and `Window::simulate_key`, for tests | The call fails |
 
 The xcb-cursor library loads the cursors of the cursor theme. Without it, the cursors come from the core cursor font.
 
@@ -253,7 +253,7 @@ The facade maps a selection failure, a missing protocol, and a library that does
 - **Gestures.** With `zwp_pointer_gestures_v1`, the seat pointer gets a `zwp_pointer_gesture_pinch_v1`. Each pinch update gives `GestureEvent::Magnify` at the pointer position.
 - **Gesture scale.** The protocol gives the scale since the start of the pinch. The event scale is the change since the previous update, as on macOS. Thus, the product of the event scales is the scale of the pinch.
 - **Ignored gestures.** An update without a change of scale gives no event. The end or the cancel of a pinch gives no event, and the backend ignores swipe and hold gestures.
-- **Fake input.** `Window::simulate_pointer` returns `Error::MissingProtocol`, because Wayland has no protocol for fake input of a client.
+- **Fake input.** `Window::simulate_pointer` and `Window::simulate_key` return `Error::MissingProtocol`, because Wayland has no protocol for fake input of a client.
 
 ### Wayland cursors
 
@@ -389,7 +389,7 @@ The selections of the ICCCM carry the clipboard, and XDND version 5 carries the 
 - **Large data.** Data larger than 256 KiB, or than a quarter of the maximum request length, goes with INCR in chunks. Reads accept INCR too. Each step of a read stops after 2 seconds without data.
 - **Drop targets.** Each window has `XdndAware`. At the first `XdndPosition`, the window decides if it takes the drag, and sends `Enter`. Each `XdndStatus` asks for all positions. On `XdndDrop`, the window reads `XdndSelection` at the time of the drop, and sends `XdndFinished`.
 - **Drag sources.** `begin_drag` needs the left button down on the window. The hidden window owns `XdndSelection` and holds `XdndTypeList` and `XdndActionList`. The client grabs the pointer and sends the messages to the aware window under it. It sends one position at a time, and waits for the status. The source gets `DragEnded` on `XdndFinished`, or `DragOperation::None` after 5 seconds without it.
-- **Tests.** `Window::simulate_pointer` is hidden test support. On X11 it moves the pointer and presses or releases the left button through XTEST.
+- **Tests.** `Window::simulate_pointer` and `Window::simulate_key` are hidden test support. On X11, they send pointer and key input through XTEST. A key goes to the window with the input focus.
 
 ## Alert sound
 
@@ -425,12 +425,17 @@ The changes of the input method come in a group that ends with `done`. Each grou
 
 On X11, XIM connects the window to the input method, on-the-spot:
 
-1. The client opens the input method of `XMODIFIERS` on a second Xlib connection. It uses the input method only when it takes preedit callbacks. The local input method of Xlib does not, so without `XMODIFIERS` there is no input method. Keys then type their text through xkbcommon and compose.
-2. When `active` becomes true, the window gets an input context. The context has the focus while the window has it. Its spot is the bottom-left corner of the caret. When `active` becomes false, the context closes, and marked text gives `Unmark`.
-3. Each key of a window with a focused context goes to the input method first. The keys that the input method does not use come back, and the window gets them as usual.
-4. The preedit draw callback gives `SetMarkedText`, with the caret as an empty selection in UTF-16 units. The preedit done callback gives `Unmark`. Committed text gives `CommitText` without a replacement range.
+1. The client opens a second Xlib connection. It registers an instantiate callback for the input method of `XMODIFIERS`.
+2. When the callback runs, the client opens the input method. It uses the input method only when it takes preedit callbacks.
+3. When `active` becomes true, the window gets an input context. The context has the focus while the window has it. Its spot is the bottom-left corner of the caret. When `active` becomes false, the context closes, and marked text gives `Unmark`.
+4. Each key of a window with a focused context goes to the input method first. The keys that the input method does not use come back, and the window gets them as usual.
+5. The preedit draw callback gives `SetMarkedText`, with the caret as an empty selection in UTF-16 units. The preedit done callback gives `Unmark`. Committed text gives `CommitText` without a replacement range.
 
 XIM has no surrounding text, so the X11 backend does not send `text`. `input_methods` is `Supported` on X11 when such an input method opens.
+
+- **Server restarts.** When the XIM server stops, Xlib calls the destroy callback of the input method. Marked text then gives `Unmark`, and the input contexts close. The client registers the instantiate callback again. When a server starts, the input method opens again, and each window with an active text input gets a new context. Thus a server that starts after the application also works.
+- **Local input method.** Xlib uses its local input method for `@im=none`, and for an empty `XMODIFIERS` when the locale has a compose file. It has only the `XIMPreeditNothing` and `XIMPreeditNone` styles, without preedit callbacks. Thus the client closes it and the second connection. Keys then type their text through xkbcommon and compose, and `input_methods` is `Unsupported`.
+- **Connections.** The [specification](specs/2026-10-15-linux-backend.md) names libX11-xcb, so that XIM and xcb share one connection. The backend does not load libX11-xcb, because a shared connection does not work. With `XCBOwnsEventQueue`, Xlib reads no events, so the XIM transport spins in `XIfEvent` while it waits for a reply. With the event queue of Xlib, the event loop must read `XEvent` structures, not the wire events of xcb. Thus XIM keeps its own connection, and Xlib owns its event queue.
 
 ## Desktop integration
 
@@ -763,13 +768,13 @@ The session has these parts:
 - a private D-Bus session bus and the AT-SPI registry
 - headless sway with one 1280x800 output, and Xvfb on `:99` with RandR. Xvfb does not reset when its last client disconnects
 - a virtual keyboard and pointer for sway, which a test drives through the FIFO in `CHOSCORUI_VIRTUAL_INPUT`
-- XTEST on Xvfb, which a test drives through `Window::simulate_pointer`
+- XTEST on Xvfb, which a test drives through `Window::simulate_pointer` and `Window::simulate_key`
 
 | Test | What it checks |
 | --- | --- |
 | [`window_smoke.rs`](../crates/choscorui-linux/tests/window_smoke.rs) | Windows open, paint, and close. The painter follows `CHOSCORUI_PAINTER`. The X11 geometry round-trips. On a private Xvfb, the X11 scale follows the physical size, and then `Xft.dpi`. |
 | [`clipboard_smoke.rs`](../crates/choscorui-linux/tests/clipboard_smoke.rs) | The clipboard with a second process, INCR on X11, and drags between two windows |
-| [`ime_smoke.rs`](../crates/choscorui-linux/tests/ime_smoke.rs) | Wayland composition through a test input method. The XIM test needs an XIM server in `XMODIFIERS`. |
+| [`ime_smoke.rs`](../crates/choscorui-linux/tests/ime_smoke.rs) | Wayland composition through a test input method. On X11 with `XMODIFIERS=@im=none`, the local input method of Xlib opens and closes, and keys type through xkbcommon. The XIM server test runs only by hand, with a real XIM server. |
 | [`lifetime_smoke.rs`](../crates/choscorui-linux/tests/lifetime_smoke.rs) | Window churn, timers, posted work, and the footprint |
 | [`modal_smoke.rs`](../crates/choscorui-linux/tests/modal_smoke.rs) and [`dialog_smoke.rs`](../crates/choscorui/tests/dialog_smoke.rs) | Modal windows, drawn alerts, and drawn file dialogs |
 | [`menu_smoke.rs`](../crates/choscorui-linux/tests/menu_smoke.rs) | The menu queue, and popups that open, flip, and close at a click outside |

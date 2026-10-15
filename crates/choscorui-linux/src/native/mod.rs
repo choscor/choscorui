@@ -16,7 +16,7 @@ mod transfer;
 mod types;
 mod wayland;
 mod window;
-mod x11;
+pub(crate) mod x11;
 
 pub use clipboard::SystemClipboard;
 pub use event_loop::{PostError, Poster, Timer};
