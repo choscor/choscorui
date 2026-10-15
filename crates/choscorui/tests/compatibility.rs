@@ -36,6 +36,8 @@ use std::path::PathBuf;
 
 #[path = "../../choscorui-controls/tests/catalog/mod.rs"]
 mod catalog;
+#[path = "compatibility/decorations.rs"]
+mod decorations;
 #[path = "compatibility/key_conventions.rs"]
 mod key_conventions;
 #[path = "compatibility/painted_slots.rs"]

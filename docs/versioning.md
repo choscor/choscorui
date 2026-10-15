@@ -58,6 +58,8 @@ On a target without a backend, `App::start` and `App::run` return `AppError::Uns
 
 `key_conventions.txt` records the same keys and labels on `KeyConvention::Mac` and on `KeyConvention::Pc`. It records the shortcut labels of an open context menu and of a shortcut field. It also records the value and the selection of an input and a text area after each editing key.
 
+`decorations.txt` records the display list of a client-side title bar, in both directions. It records a window that is active, inactive, and maximized, and a dialog with only Close.
+
 The `painted_<group>.txt` files pin the default recipe of each `ControlKind`, with one file for each recipe group. For each kind, variant, size, and slot, the general slot painter paints a box, an icon, and a label. The file records the `rest` paint, and each key state that paints differently. A list names the states that paint the same as `rest`. A size shows only if it paints differently from `default`. Slots with equal styles in all cases share one record.
 
 To accept an intended change, do these steps:
