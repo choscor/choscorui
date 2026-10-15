@@ -18,6 +18,7 @@ mod ctypes;
 pub(crate) mod dl;
 pub(crate) mod libc;
 pub(crate) mod wayland;
+pub(crate) mod xkb;
 
 pub use dl::LoadError;
 
@@ -39,6 +40,7 @@ pub(crate) fn declarations() -> (
         dl::check_items(),
         libc::check_items(),
         wl::WaylandClient::check_items(),
+        xkb::XkbCommon::check_items(),
     ];
     let structs = vec![
         libc::PollFd::layout(),
@@ -49,7 +51,7 @@ pub(crate) fn declarations() -> (
         wl::WlArray::layout(),
         wl::WlArgument::layout(),
     ];
-    let constants = [libc::constants(), wl::constants()]
+    let constants = [libc::constants(), wl::constants(), xkb::constants()]
         .into_iter()
         .flatten()
         .collect();

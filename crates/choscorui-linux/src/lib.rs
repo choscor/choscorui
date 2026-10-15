@@ -29,3 +29,7 @@ pub use x11::*;
 mod ffi;
 #[cfg(target_os = "linux")]
 pub use ffi::LoadError;
+#[cfg(target_os = "linux")]
+mod native;
+#[cfg(target_os = "linux")]
+pub use native::*;

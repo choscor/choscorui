@@ -104,7 +104,6 @@ libraries! {
             fn wl_proxy_destroy(proxy: *mut WlProxy);
             fn wl_proxy_get_version(proxy: *mut WlProxy) -> u32;
             fn wl_proxy_get_id(proxy: *mut WlProxy) -> u32;
-            fn wl_proxy_set_user_data(proxy: *mut WlProxy, data: *mut c_void);
             fn wl_proxy_get_user_data(proxy: *mut WlProxy) -> *mut c_void;
         }
     }

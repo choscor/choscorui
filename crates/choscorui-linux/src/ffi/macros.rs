@@ -399,12 +399,13 @@ macro_rules! ffi_enum {
 }
 
 /// Declares the values of C macros and enum constants. The binding check
-/// compares each value with the header.
+/// compares each value with the header. A constant whose C name is not an
+/// upper-case Rust name gives it after `=>`.
 macro_rules! c_consts {
     (
         $(#[$tmeta:meta])*
         $tvis:vis fn $table:ident;
-        $($(#[$meta:meta])* $vis:vis const $name:ident: $ty:ty = $value:expr;)*
+        $($(#[$meta:meta])* $vis:vis const $name:ident: $ty:ty = $value:expr $(=> $cname:literal)?;)*
     ) => {
         $($(#[$meta])* $vis const $name: $ty = $value;)*
 
@@ -412,11 +413,13 @@ macro_rules! c_consts {
         #[cfg(test)]
         $tvis fn $table() -> Vec<$crate::ffi::checks::ConstItem> {
             vec![$($crate::ffi::checks::ConstItem {
-                name: stringify!($name),
+                name: $crate::ffi::macros::c_consts!(@name $name $($cname)?),
                 value: i128::from($name),
             }),*]
         }
     };
+    (@name $name:ident) => { stringify!($name) };
+    (@name $name:ident $cname:literal) => { $cname };
 }
 
 /// Declares a C callback. The body runs inside `catch_unwind`; a panic

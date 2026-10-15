@@ -622,22 +622,15 @@ impl Proxy {
     ) -> Proxy {
         let id = display.next_id.get();
         display.next_id.set(id + 1);
-        // SAFETY: `raw` is a live proxy that nothing else configured. Its
-        // user data is the id; the dispatcher data is the display, which
-        // the proxy keeps alive through its `Rc`.
-        unsafe {
-            (display.lib.wl_proxy_set_user_data)(
-                raw,
-                std::ptr::without_provenance_mut(id as usize),
-            );
-        }
-        // SAFETY: as above.
+        // SAFETY: `raw` is a live proxy that nothing else configured. The
+        // dispatcher data is the display, which the proxy keeps alive
+        // through its `Rc`, and the user data is the id.
         unsafe {
             (display.lib.wl_proxy_add_dispatcher)(
                 raw,
                 Some(dispatch),
                 Rc::as_ptr(display).cast::<c_void>(),
-                std::ptr::null_mut(),
+                std::ptr::without_provenance_mut(id as usize),
             );
         }
         Proxy {
