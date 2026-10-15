@@ -12,6 +12,7 @@ mod macros;
 
 #[cfg(test)]
 mod checks;
+pub(crate) mod codecs;
 #[cfg(test)]
 mod ctype;
 mod ctypes;
@@ -36,13 +37,14 @@ pub(crate) fn declarations() -> (
     Vec<checks::ConstItem>,
 ) {
     use wayland::sys as wl;
-    let libraries = vec![
+    let mut libraries = vec![
         dl::check_items(),
         libc::check_items(),
         wl::WaylandClient::check_items(),
         xkb::XkbCommon::check_items(),
     ];
-    let structs = vec![
+    libraries.extend(codecs::check_items());
+    let mut structs = vec![
         libc::PollFd::layout(),
         libc::Timespec::layout(),
         libc::Itimerspec::layout(),
@@ -51,7 +53,8 @@ pub(crate) fn declarations() -> (
         wl::WlArray::layout(),
         wl::WlArgument::layout(),
     ];
-    let constants = [libc::constants(), wl::constants(), xkb::constants()]
+    structs.extend(codecs::layouts());
+    let constants = [libc::constants(), wl::constants(), codecs::constants(), xkb::constants()]
         .into_iter()
         .flatten()
         .collect();
